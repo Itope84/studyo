@@ -45,13 +45,29 @@ pnpm typecheck && pnpm lint
 
 ## Behind Cloudflare Access
 
-Use one hostname for both the app and the API, so Access's sign-in cookie covers everything:
+The app signs in to Access itself, from any hostname: the web app on Pages, the Android app, or the server's own web port.
 
-1. Point the tunnel at the **web port** (`http://localhost:8788`). That port serves the app and also the API under `/api`.
-2. Protect the hostname with an Access application (your email or Google login).
-3. Open `https://<host>/connect?server=https://<host>/api&token=<token>` once. Access asks you to sign in first, then the app connects. The server prints this link too.
+**How it works:** on Connect, the app finds Access in the way and offers **Sign in with Cloudflare Access**. That opens `<server>/auth/access` in the browser (a full-page redirect on web, an in-app browser sheet on Android). Access shows its login. Once you're signed in, the server sends your Access token back to the app, which sends it on every request as `cf-access-token`. When the token expires, the app shows "Sign in" again.
 
-No service token is needed in the browser. When the sign-in expires, the app shows "Sign in again", which reloads the page through Access. Service tokens (Settings → Connect → "Server behind Cloudflare Access?") are for the Android app or for a web app hosted somewhere else.
+**One-time setup in Cloudflare Zero Trust:**
+
+1. **Access application** for the server's hostname (for example `studyo.example.com`), with your login policy.
+2. In that application's settings, under CORS, turn on **Bypass OPTIONS requests to origin**. The web app's preflight requests carry no credentials, and the server answers them itself.
+3. **A second Access application for the path `studyo.example.com/f/`** with a **Bypass** policy. Audio, video and the Reader page load from `/f/<file token>/…` and can't send headers in a browser. The file token, derived from your access token, protects those URLs.
+
+**On the server**, list where the token may be sent back:
+
+```bash
+STUDYO_ORIGINS=https://studyo.pages.dev   # your web app's origin(s); also used for CORS
+# The Android app (studyo://) and localhost are always allowed.
+# STUDYO_APP_URLS adds other return addresses without changing CORS.
+```
+
+**Same hostname (no Pages):** point the tunnel at the web port (`:8788`). It serves the app and the API under `/api`, so Access's own cookie covers everything, and the bypass rules above are optional.
+
+**Service tokens** (Connect → "Server behind Cloudflare Access?") still work for non-interactive clients.
+
+**Limits:** a browser can't see a redirect from another hostname, so when a Pages-hosted app can't reach the server it offers the sign-in as a possibility, and the sign-in page says plainly if the server isn't behind Access. The Android app sees the login page and knows for sure.
 
 ## Settings worth knowing
 
@@ -60,7 +76,8 @@ No service token is needed in the browser. When the sign-in expires, the app sho
 | `STUDYO_LIBRARY` | `./library` | The library folder (source of truth) |
 | `STUDYO_PORT` / `STUDYO_WEB_PORT` | 8787 / 8788 | API and web app ports |
 | `STUDYO_TOKEN` | generated once | Access token |
-| `STUDYO_ORIGINS` | `*` | Allowed browser origins (comma separated) |
+| `STUDYO_ORIGINS` | `*` | Allowed browser origins (comma separated); also where Access sign-ins may return |
+| `STUDYO_APP_URLS` | unset | Extra return addresses for Access sign-ins |
 | `STUDYO_REPLAY` | unset | Replay scripts instead of real CLIs |
 
 Which CLI runs jobs, and an optional model for each, are set in the app under Settings.

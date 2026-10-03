@@ -20,6 +20,12 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
+      command: 'node scripts/fake-access.mjs',
+      url: 'http://localhost:8792/__login',
+      reuseExistingServer: true,
+      timeout: 30_000,
+    },
+    {
       command: `pnpm --filter @studyo/app exec expo start --web --port ${APP_PORT}`,
       url: `http://localhost:${APP_PORT}`,
       reuseExistingServer: true,

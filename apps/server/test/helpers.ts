@@ -23,6 +23,7 @@ export async function makeServer() {
       stateDir,
       skillsDir: join(REPO_ROOT, 'skills'),
       origins: '*',
+      appReturns: ['https://studyo.pages.dev'],
       replayDir: join(REPO_ROOT, 'fixtures/replay'),
     },
     { watch: false, dbFile: ':memory:' },

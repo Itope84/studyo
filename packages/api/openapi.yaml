@@ -16,6 +16,9 @@ info:
     - Media elements and the Reader's iframe cannot send headers, so files are also served under
       `/f/{file_token}/...`. The file token is derived from the access token, grants read access to files only,
       and is returned by `GET /server`.
+    - Behind Cloudflare Access with the app on another hostname, clients get an Access token through
+      `GET /auth/access` and send it as `cf-access-token`. Media and the Reader can't send headers, so `/f/*`
+      needs an Access bypass rule; the file token protects it.
 servers:
   - url: http://localhost:8787
 security:
@@ -46,6 +49,34 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+
+  /auth/access:
+    get:
+      tags: [server]
+      summary: Cloudflare Access sign-in hand-off for apps on another hostname
+      description: |
+        Opened in a browser (a full-page redirect on web, an auth session on Android). Cloudflare Access makes
+        the person sign in before the request reaches the server, then forwards it with their Access token. The
+        server redirects to `return` with `#cf_token=<token>`. The app then sends `cf-access-token: <token>` on
+        every request, which Access accepts in place of its cookie.
+
+        `return` must be the app's scheme (`studyo://`), a localhost address, or an origin listed in
+        `STUDYO_ORIGINS` or `STUDYO_APP_URLS`.
+      security: []
+      operationId: accessHandoff
+      parameters:
+        - name: return
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Back to the app with the token in the URL fragment
+        '400':
+          description: 'Not behind Access, or the return address is not allowed (an HTML page)'
+          content:
+            text/html:
+              schema: { type: string }
 
   /server:
     get:

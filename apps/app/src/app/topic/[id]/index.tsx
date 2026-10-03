@@ -2,7 +2,7 @@ import type { Progress, Rendered, Resource, Topic } from '@studyo/api';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Linking, Platform, Pressable, View } from 'react-native';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
@@ -97,7 +97,10 @@ export default function TopicScreen() {
   const enrich = () => run('enrich', () => api.startJob(id, { kind: 'enrich' }));
   const addFile = () =>
     run('upload', async () => {
-      const picked = await pickFile([...MEDIA_TYPES, 'text/markdown'], {});
+      const picked = await pickFile(
+        [...MEDIA_TYPES, ...(Platform.OS === 'web' ? ['.md', 'text/markdown'] : ['text/markdown'])],
+        {},
+      );
       if (!picked) return;
       picked.form.append('made_with', /notebooklm/i.test(picked.name) ? 'NotebookLM' : '');
       await api.upload(id, picked.form);

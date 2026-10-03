@@ -21,6 +21,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cloudflare Access sign-in hand-off for apps on another hostname
+         * @description Opened in a browser (a full-page redirect on web, an auth session on Android). Cloudflare Access makes
+         *     the person sign in before the request reaches the server, then forwards it with their Access token. The
+         *     server redirects to `return` with `#cf_token=<token>`. The app then sends `cf-access-token: <token>` on
+         *     every request, which Access accepts in place of its cookie.
+         *
+         *     `return` must be the app's scheme (`studyo://`), a localhost address, or an origin listed in
+         *     `STUDYO_ORIGINS` or `STUDYO_APP_URLS`.
+         */
+        get: operations["accessHandoff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/server": {
         parameters: {
             query?: never;
@@ -1066,6 +1092,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    accessHandoff: {
+        parameters: {
+            query: {
+                return: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to the app with the token in the URL fragment */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not behind Access, or the return address is not allowed (an HTML page) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
         };

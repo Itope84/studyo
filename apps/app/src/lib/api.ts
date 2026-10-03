@@ -45,6 +45,7 @@ export function authHeaders(conn: Connection): Record<string, string> {
     h['CF-Access-Client-Id'] = conn.cfClientId;
     h['CF-Access-Client-Secret'] = conn.cfClientSecret;
   }
+  if (conn.cfToken) h['CF-Access-Token'] = conn.cfToken;
   return h;
 }
 
@@ -71,15 +72,11 @@ async function request<T>(
   try {
     res = await fetch(`${c.url}${path}`, { method, headers, body: payload });
   } catch {
-    if (await accessExpired(c)) {
-      throw new ApiError(
-        401,
-        'access_expired',
-        'Your Cloudflare Access sign-in has expired. Sign in again to continue.',
-      );
-    }
+    if (await accessBlocks(c)) throw accessError(c);
     throw new ApiError(0, 'offline', "Can't reach the server.");
   }
+  // Native fetch follows Access's redirect and lands on its login page instead of failing.
+  if (res.url?.includes('cloudflareaccess.com')) throw accessError(c);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let json: unknown = null;
@@ -91,11 +88,7 @@ async function request<T>(
   if (!res.ok) {
     const err = (json as { error?: { code?: string; message?: string } } | null)?.error;
     if (!err && (res.status === 302 || res.status === 403 || text.includes('cloudflareaccess'))) {
-      throw new ApiError(
-        res.status,
-        'access',
-        'Cloudflare Access refused the request. Check the service token in Settings.',
-      );
+      throw accessError(c);
     }
     throw new ApiError(
       res.status,
@@ -103,6 +96,7 @@ async function request<T>(
       err?.message ?? `The server answered ${res.status}.`,
     );
   }
+  if (json === null && text.includes('cloudflareaccess')) throw accessError(c);
   if (json === null && text)
     throw new ApiError(res.status, 'bad_response', 'The server sent something unexpected.');
   return json as T;
@@ -178,26 +172,62 @@ export function fileUrl(fileToken: string, libraryPath: string): string {
   return `${c.url}/f/${fileToken}/${libraryPath.split('/').map(enc).join('/')}`;
 }
 
+/** Access wants a sign-in: a first one (`access_required`) or a fresh one (`access_expired`). */
+function accessError(c: Connection): ApiError {
+  return c.cfToken
+    ? new ApiError(
+        401,
+        'access_expired',
+        'Your Cloudflare Access sign-in has expired. Sign in again to continue.',
+      )
+    : new ApiError(
+        401,
+        'access_required',
+        'This server is protected by Cloudflare Access. Sign in to continue.',
+      );
+}
+
 /**
- * Behind Cloudflare Access, an expired sign-in turns every API call into a redirect to the login page, which
- * fetch reports as a network error. When the app and API share an origin, a quick probe of a static file
- * tells the two apart: a redirect means the session expired, not that the server is down.
+ * Behind Cloudflare Access, a missing or expired sign-in turns API calls into redirects to the login page,
+ * which a browser reports as a network error, the same as a server that is down. What can be known:
+ * - With an Access token: it carries its own expiry.
+ * - Same origin as the page: a probe that doesn't follow redirects sees Access's redirect.
+ * - Another origin, in a browser: nothing (browsers hide cross-origin redirects). The connect screen offers
+ *   the sign-in when the server can't be reached. Native fetch follows the redirect instead, which `request`
+ *   spots by the login page it lands on.
  */
-async function accessExpired(c: Connection): Promise<boolean> {
-  if (typeof window === 'undefined' || !window.location?.origin) return false;
-  if (!c.url.startsWith(window.location.origin)) return false;
+async function accessBlocks(c: Connection): Promise<boolean> {
+  if (c.cfToken) return tokenExpired(c.cfToken);
+  if (
+    typeof window === 'undefined' ||
+    !window.location?.origin ||
+    !c.url.startsWith(window.location.origin)
+  ) {
+    return false;
+  }
   try {
-    const probe = await fetch(`${window.location.origin}/manifest.json?probe=${Date.now()}`, {
-      redirect: 'manual',
-    });
-    return (
-      probe.type === 'opaqueredirect' ||
-      probe.status === 302 ||
-      probe.status === 401 ||
-      probe.status === 403
-    );
+    const probe = await fetch(`${c.url}/health?probe=${Date.now()}`, { redirect: 'manual' });
+    return probe.type === 'opaqueredirect' || probe.status === 302;
   } catch {
     return false;
+  }
+}
+
+/** True when a JWT's `exp` has passed (or it can't be read). */
+export function tokenExpired(jwt: string): boolean {
+  try {
+    const part = jwt.split('.')[1] ?? '';
+    const json = JSON.parse(
+      atob(
+        part
+          .replace(/-/g, '+')
+          .replace(/_/g, '/')
+          .padEnd(Math.ceil(part.length / 4) * 4, '='),
+      ),
+    );
+    return typeof json.exp === 'number' ? json.exp * 1000 < Date.now() : false;
+  } catch {
+    return true;
   }
 }
 

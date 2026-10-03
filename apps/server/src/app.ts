@@ -114,6 +114,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
         'Last-Event-ID',
         'CF-Access-Client-Id',
         'CF-Access-Client-Secret',
+        'CF-Access-Token',
       ],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       exposeHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length'],
@@ -135,7 +136,14 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   const tokenBuf = Buffer.from(config.token);
   app.use('*', async (c, next) => {
     const path = c.req.path;
-    if (c.req.method === 'OPTIONS' || path === '/health' || path.startsWith('/f/')) return next();
+    if (
+      c.req.method === 'OPTIONS' ||
+      path === '/health' ||
+      path === '/auth/access' ||
+      path.startsWith('/f/')
+    ) {
+      return next();
+    }
     const header = c.req.header('Authorization') ?? '';
     const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
     if (given.length !== tokenBuf.length || !timingSafeEqual(given, tokenBuf)) {
@@ -147,6 +155,36 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   // ---- Server ---------------------------------------------------------------
 
   app.get('/health', (c) => c.json({ ok: true, name: 'studyo' as const, version: VERSION }));
+
+  /**
+   * Cloudflare Access hand-off for apps on another hostname (Android, a web app on Pages). The app opens this
+   * page in a browser; Access makes the person sign in before the request gets here, then forwards it with
+   * their Access token in `Cf-Access-Jwt-Assertion`. We send that token back to the app, which puts it in a
+   * `cf-access-token` header on every request. Only allowed return addresses get the token.
+   */
+  app.get('/auth/access', (c) => {
+    const back = c.req.query('return') ?? '';
+    if (!returnAllowed(back, config.appReturns)) {
+      return c.html(
+        page(
+          'Return address not allowed',
+          `Studyo won't send your sign-in to <code>${escapeHtml(back || '(none)')}</code>. Add the app's address to STUDYO_ORIGINS (web) or STUDYO_APP_URLS on the server.`,
+        ),
+        400,
+      );
+    }
+    const jwt = c.req.header('Cf-Access-Jwt-Assertion');
+    if (!jwt) {
+      return c.html(
+        page(
+          'No Cloudflare Access sign-in',
+          'This request did not come through Cloudflare Access, so there is nothing to hand back. If the server is not behind Access, connect without signing in.',
+        ),
+        400,
+      );
+    }
+    return c.redirect(`${back}#cf_token=${encodeURIComponent(jwt)}`, 302);
+  });
 
   app.get('/server', async (c) => {
     const info: ServerInfo = {
@@ -820,3 +858,38 @@ async function librarySize(root: string): Promise<number> {
   await walk(root);
   return total;
 }
+
+/** The app's own scheme, local development, and configured origins may receive the Access token. */
+export function returnAllowed(url: string, allowed: string[]): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === 'studyo:' || parsed.protocol === 'exp:') return true;
+  if (
+    (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+    ['localhost', '127.0.0.1'].includes(parsed.hostname)
+  ) {
+    return true;
+  }
+  return allowed.some((a) => {
+    if (a === '*') return false; // a wildcard CORS setting is not a reason to hand out sign-ins
+    if (a.endsWith('://')) return url.startsWith(a);
+    try {
+      return new URL(a).origin === parsed.origin;
+    } catch {
+      return false;
+    }
+  });
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(
+    /[&<>"]/g,
+    (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] as string,
+  );
+
+const page = (title: string, body: string) =>
+  `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:520px;margin:48px auto;padding:0 16px;color:#1E1E1C;background:#FBFBFA"><h1 style="font-size:22px">${title}</h1><p>${body}</p></body>`;

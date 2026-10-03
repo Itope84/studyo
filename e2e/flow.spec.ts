@@ -163,3 +163,28 @@ test('rename and delete a file in the inbox', async ({ page }) => {
   await v(page.getByRole('button', { name: 'Delete', exact: true })).click();
   await expect(page.getByText('Raft reading notes.md')).toHaveCount(0, { timeout: 15_000 });
 });
+
+test('connect to a server behind Cloudflare Access by signing in', async ({ page }) => {
+  const behindAccess = 'http://localhost:8792';
+  await page.goto('/connect');
+  await v(page.getByLabel('Server address')).fill(behindAccess);
+  await v(page.getByLabel('Access token')).fill(TOKEN);
+  await v(page.getByRole('button', { name: 'Connect' })).click();
+  // From another origin the browser can't see Access's redirect, so the app offers the sign-in.
+  await expect(v(page.getByRole('button', { name: 'Sign in with Cloudflare Access' }))).toBeVisible(
+    { timeout: 20_000 },
+  );
+  await shot(page, '13-access-needed');
+  await v(page.getByRole('button', { name: 'Sign in with Cloudflare Access' })).click();
+  // The (fake) Access login page, on the server's hostname.
+  await page.getByRole('button', { name: 'Sign in with fake Access' }).click();
+  // Back in the app, connected, with the token sent on every request.
+  await expect(v(page.getByRole('tab', { name: 'Library' }))).toBeVisible({ timeout: 30_000 });
+  await expect(
+    v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(v(page.getByRole('button', { name: /^Server connected/ }))).toBeVisible({
+    timeout: 20_000,
+  });
+  expect(page.url()).not.toContain('cf_token');
+});

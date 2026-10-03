@@ -22,6 +22,8 @@ export interface Config {
   stateDir: string;
   skillsDir: string;
   origins: string[] | '*';
+  /** Where the Access sign-in hand-off may send the token back to (app origins and the app's URL scheme). */
+  appReturns: string[];
   /** Replace real CLIs with the replay adapter (tests, demos). */
   replayDir: string | null;
 }
@@ -64,6 +66,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     stateDir,
     skillsDir,
     origins: origins?.length ? origins : '*',
+    appReturns: [
+      ...(origins ?? []),
+      ...(env.STUDYO_APP_URLS?.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean) ?? []),
+    ],
     replayDir: env.STUDYO_REPLAY ? resolve(env.STUDYO_REPLAY) : null,
   };
 }

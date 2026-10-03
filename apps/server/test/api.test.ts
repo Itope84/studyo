@@ -18,6 +18,37 @@ describe('server basics', () => {
     expectSchema('Error', await res.json());
   });
 
+  it('hands a Cloudflare Access token back to allowed apps only', async () => {
+    s = await makeServer();
+    const jwt = 'eyJhbGciOi.test.token';
+    const ok = await s.app.request(
+      `/auth/access?return=${encodeURIComponent('https://studyo.pages.dev/connect')}`,
+      {
+        headers: { 'Cf-Access-Jwt-Assertion': jwt },
+      },
+    );
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get('Location')).toBe(
+      `https://studyo.pages.dev/connect#cf_token=${encodeURIComponent(jwt)}`,
+    );
+    const app = await s.app.request(`/auth/access?return=${encodeURIComponent('studyo://auth')}`, {
+      headers: { 'Cf-Access-Jwt-Assertion': jwt },
+    });
+    expect(app.headers.get('Location')).toMatch(/^studyo:\/\/auth#cf_token=/);
+    const evil = await s.app.request(
+      `/auth/access?return=${encodeURIComponent('https://evil.example/steal')}`,
+      {
+        headers: { 'Cf-Access-Jwt-Assertion': jwt },
+      },
+    );
+    expect(evil.status).toBe(400);
+    expect(await evil.text()).not.toContain(jwt);
+    const noAccess = await s.app.request(
+      `/auth/access?return=${encodeURIComponent('studyo://auth')}`,
+    );
+    expect(noAccess.status).toBe(400);
+  });
+
   it('lists the library and matches the contract', async () => {
     s = await makeServer();
     const list = await s.call('GET', '/topics');

@@ -32,5 +32,42 @@ export async function pickFile(
   return { name: asset.name, form };
 }
 
-export const MEDIA_TYPES = ['audio/*', 'video/*'];
+/**
+ * Audio and video the server accepts. On the web the picker's filter is built from this list, and iPhone
+ * Safari greys out most audio files under a bare `audio/*`, so the exact types and extensions are listed.
+ * Android's picker only understands MIME types, so it gets the wildcards.
+ */
+export const MEDIA_TYPES =
+  Platform.OS === 'web'
+    ? [
+        'audio/*',
+        'video/*',
+        '.mp3',
+        'audio/mpeg',
+        '.m4a',
+        'audio/mp4',
+        'audio/x-m4a',
+        'audio/m4a',
+        '.aac',
+        'audio/aac',
+        '.wav',
+        'audio/wav',
+        'audio/x-wav',
+        '.ogg',
+        '.oga',
+        'audio/ogg',
+        '.opus',
+        'audio/opus',
+        '.flac',
+        'audio/flac',
+        '.mp4',
+        'video/mp4',
+        '.m4v',
+        '.mov',
+        'video/quicktime',
+        '.webm',
+        'video/webm',
+        '.mkv',
+      ]
+    : ['audio/*', 'video/*'];
 export const PDF_TYPES = ['application/pdf'];

@@ -7,6 +7,8 @@ export interface Connection {
   token: string;
   cfClientId: string;
   cfClientSecret: string;
+  /** Cloudflare Access token from the sign-in hand-off, sent as `cf-access-token`. */
+  cfToken?: string;
 }
 
 interface Prefs {
@@ -20,6 +22,8 @@ interface Prefs {
   homeSort: 'recent' | 'title' | 'progress';
   /** Chat messages whose "enrich further" offer was dismissed. */
   dismissedOffers: string[];
+  /** A connection waiting for its Cloudflare Access sign-in to come back (web redirects lose page state). */
+  pendingConnection: Connection | null;
   hydrated: boolean;
   setConnection: (c: Connection | null) => void;
   setTheme: (t: Prefs['theme']) => void;
@@ -28,6 +32,8 @@ interface Prefs {
   dismissContinue: (key: string | null) => void;
   setHomeSort: (s: Prefs['homeSort']) => void;
   dismissOffer: (messageId: string) => void;
+  setPending: (c: Connection | null) => void;
+  setAccessToken: (token: string) => void;
 }
 
 export const usePrefs = create<Prefs>()(
@@ -40,6 +46,7 @@ export const usePrefs = create<Prefs>()(
       dismissedContinue: null,
       homeSort: 'recent',
       dismissedOffers: [],
+      pendingConnection: null,
       hydrated: false,
       setConnection: (connection) =>
         set({
@@ -53,6 +60,9 @@ export const usePrefs = create<Prefs>()(
       setLastEventId: (lastEventId) => set({ lastEventId }),
       dismissContinue: (dismissedContinue) => set({ dismissedContinue }),
       setHomeSort: (homeSort) => set({ homeSort }),
+      setPending: (pendingConnection) => set({ pendingConnection }),
+      setAccessToken: (cfToken) =>
+        set((s) => (s.connection ? { connection: { ...s.connection, cfToken } } : {})),
       dismissOffer: (id) =>
         set((s) => ({
           dismissedOffers: [...s.dismissedOffers.filter((x) => x !== id), id].slice(-200),
@@ -62,6 +72,7 @@ export const usePrefs = create<Prefs>()(
       name: 'studyo-prefs',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: ({
+        pendingConnection,
         connection,
         theme,
         speed,
@@ -77,6 +88,7 @@ export const usePrefs = create<Prefs>()(
         dismissedContinue,
         homeSort,
         dismissedOffers,
+        pendingConnection,
       }),
       onRehydrateStorage: () => () => usePrefs.setState({ hydrated: true }),
     },

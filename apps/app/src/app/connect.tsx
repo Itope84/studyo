@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Input } from '@/components/inputs';
 import { Button, Field, Header, Notice, Screen, T } from '@/components/ui';
+import { signInWithAccess } from '@/lib/access';
 import { ApiError, api, sameOriginServer } from '@/lib/api';
 import { type Connection, usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
@@ -28,15 +29,24 @@ export default function Connect() {
   const [sameOrigin, setSameOrigin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accessFor, setAccessFor] = useState<Connection | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [accessSure, setAccessSure] = useState(false);
 
-  const connect = async () => {
+  const connect = async (cfToken?: string, override?: Partial<Connection>) => {
     setBusy(true);
     setError(null);
+    setAccessFor(null);
     const conn: Connection = {
-      url: url.trim().replace(/\/+$/, ''),
-      token: token.trim(),
-      cfClientId: cfId.trim(),
-      cfClientSecret: cfSecret.trim(),
+      url: (override?.url ?? url).trim().replace(/\/+$/, ''),
+      token: (override?.token ?? token).trim(),
+      cfClientId: (override?.cfClientId ?? cfId).trim(),
+      cfClientSecret: (override?.cfClientSecret ?? cfSecret).trim(),
+      ...(cfToken
+        ? { cfToken }
+        : existing?.cfToken && existing.url === url.trim()
+          ? { cfToken: existing.cfToken }
+          : {}),
     };
     try {
       if (!/^https?:\/\//.test(conn.url))
@@ -49,23 +59,54 @@ export default function Connect() {
       setConnection(conn);
       router.replace('/');
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? e.status === 401
-            ? 'The server refused the access token.'
-            : e.message
-          : (e as Error).message,
-      );
+      if (e instanceof ApiError && (e.code === 'access_required' || e.code === 'access_expired')) {
+        setAccessFor(conn);
+        setAccessSure(true);
+      } else if (e instanceof ApiError && e.offline) {
+        // A browser can't see Access's redirect from another origin, so offer the sign-in as a possibility.
+        setAccessFor(conn);
+        setAccessSure(false);
+      } else {
+        setError(
+          e instanceof ApiError
+            ? e.status === 401
+              ? 'The server refused the access token.'
+              : e.message
+            : (e as Error).message,
+        );
+      }
     } finally {
       setBusy(false);
     }
   };
 
-  // A setup link (…/connect?server=…&token=…) connects straight away.
+  // A setup link (…/connect?server=…&token=…) connects straight away. Coming back from a Cloudflare Access
+  // sign-in (web), the waiting connection now carries its Access token: try it.
   useEffect(() => {
+    const pending = usePrefs.getState().pendingConnection;
+    if (pending?.cfToken) {
+      usePrefs.getState().setPending(null);
+      setUrl(pending.url);
+      setToken(pending.token);
+      setCfId(pending.cfClientId);
+      setCfSecret(pending.cfClientSecret);
+      void connect(pending.cfToken, pending);
+      return;
+    }
     if (params.server && params.token) void connect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const signIn = async () => {
+    if (!accessFor) return;
+    setSigningIn(true);
+    try {
+      const got = await signInWithAccess(accessFor, '/connect');
+      if (got) await connect(got, accessFor);
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   // Served by the Studyo server itself (for example through a Cloudflare tunnel): use its own /api, which
   // shares the page's origin and so its Cloudflare Access sign-in.
@@ -116,7 +157,7 @@ export default function Connect() {
           autoCorrect={false}
           secureTextEntry
           accessibilityLabel="Access token"
-          onSubmitEditing={connect}
+          onSubmitEditing={() => void connect()}
         />
       </Field>
       {showCf ? (
@@ -142,13 +183,35 @@ export default function Connect() {
           style={{ alignSelf: 'flex-start' }}
         />
       )}
+      {accessFor ? (
+        <Notice
+          tone={accessSure ? 'info' : 'warning'}
+          icon={accessSure ? 'lock-outline' : 'cloud-off'}
+          title={
+            accessSure ? 'This server is behind Cloudflare Access' : "Couldn't reach the server"
+          }
+          body={
+            accessSure
+              ? "Sign in with Cloudflare Access to continue. You'll come straight back here afterwards."
+              : "If it's behind Cloudflare Access, sign in first and you'll come straight back here. Otherwise check the address and that the server is running."
+          }
+          action={
+            <Button
+              label="Sign in with Cloudflare Access"
+              icon="login"
+              onPress={() => void signIn()}
+              busy={signingIn}
+            />
+          }
+        />
+      ) : null}
       {error ? (
         <Notice tone="danger" icon="error-outline" title="Couldn't connect" body={error} />
       ) : null}
       <Button
         label="Connect"
         icon="link"
-        onPress={connect}
+        onPress={() => void connect()}
         busy={busy}
         disabled={!url || !token}
         style={{ marginTop: space.md }}

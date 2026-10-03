@@ -1,5 +1,6 @@
 import type { Resource } from '@studyo/api';
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { api, fileUrl } from './api';
 import { usePrefs } from './prefs';
@@ -115,7 +116,13 @@ export async function play(track: Track, queue: Track[] = [track], startAt?: num
   const current = usePlayer.getState().track;
   if (current?.resource.id !== track.resource.id || current.topicId !== track.topicId) {
     if (current) await saveProgress(false);
-    p.replace({ uri: track.url });
+    // Native players can carry the Cloudflare Access token; browsers can't, which is why /f/* is bypassed.
+    const cfToken = usePrefs.getState().connection?.cfToken;
+    p.replace(
+      cfToken && Platform.OS !== 'web'
+        ? { uri: track.url, headers: { 'CF-Access-Token': cfToken } }
+        : { uri: track.url },
+    );
     usePlayer.setState({
       track,
       queue,
