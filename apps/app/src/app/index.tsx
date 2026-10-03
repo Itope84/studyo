@@ -7,7 +7,6 @@ import {
   Button,
   Empty,
   formatTime,
-  IconButton,
   Loading,
   Notice,
   ProgressBar,
@@ -56,13 +55,6 @@ export default function Home() {
             Studyo
           </T>
           <ConnectionMark />
-          <IconButton
-            name="move-to-inbox"
-            label="Inbox"
-            badge={data?.inbox_count || undefined}
-            onPress={() => router.push('/inbox')}
-          />
-          <IconButton name="settings" label="Settings" onPress={() => router.push('/settings')} />
         </View>
       }
       footer={
@@ -129,7 +121,7 @@ function TopicRow({ topic, job }: { topic: TopicSummary; job: Job | null }) {
   if (topic.counts.sources)
     parts.push(`${topic.counts.sources} source${topic.counts.sources > 1 ? 's' : ''}`);
   const activity = job?.status === 'running' ? job.activity : null;
-  const fraction = topic.progress.total ? topic.progress.done / topic.progress.total : 0;
+  const fraction = topic.progress.fraction;
   return (
     <Row
       title={topic.title}
@@ -148,8 +140,14 @@ function TopicRow({ topic, job }: { topic: TopicSummary; job: Job | null }) {
               </T>
             ) : null}
           </View>
+          {topic.summary && !activity ? (
+            <T variant="bodySmall" tone="lead" numberOfLines={2}>
+              {topic.summary}
+            </T>
+          ) : null}
           {activity ? (
             <T variant="meta" tone="amber" numberOfLines={1}>
+              {job?.step ? `Step ${job.step.n}/${job.step.of} · ` : ''}
               {activity}
             </T>
           ) : null}
@@ -164,10 +162,10 @@ function TopicRow({ topic, job }: { topic: TopicSummary; job: Job | null }) {
         topic.progress.total ? (
           <View
             style={{ width: 56, gap: 4, alignItems: 'flex-end' }}
-            accessibilityLabel={`${topic.progress.done} of ${topic.progress.total} done`}
+            accessibilityLabel={`${Math.round(fraction * 100)}% through, ${topic.progress.done} of ${topic.progress.total} done`}
           >
             <T variant="meta" tone="lead">
-              {topic.progress.done} of {topic.progress.total}
+              {Math.round(fraction * 100)}%
             </T>
             <View style={{ width: 56 }}>
               <ProgressBar value={fraction} />

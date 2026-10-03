@@ -49,5 +49,10 @@ export function openDb(stateDir: string, file = 'studyo.db'): Db {
       created TEXT NOT NULL
     );
   `);
+  // Columns added after the first release.
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map((c) => c.name),
+  );
+  if (!cols.has('step')) db.exec('ALTER TABLE jobs ADD COLUMN step TEXT');
   return db;
 }

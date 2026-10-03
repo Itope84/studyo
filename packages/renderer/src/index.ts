@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { type Heading, RENDERER_VERSION, RenderError, renderBody } from './render.ts';
@@ -6,7 +6,7 @@ import { documentCss } from './styles.ts';
 import { GOOGLE_FONTS_HREF } from './tokens.ts';
 
 export type { FrontMatter, Heading, RenderedBody } from './render.ts';
-export { RENDERER_VERSION, RenderError, renderBody } from './render.ts';
+export { docInfo, protectDollars, RENDERER_VERSION, RenderError, renderBody } from './render.ts';
 export { cssVars, GOOGLE_FONTS_HREF, type Palette, type ThemeName, tokens } from './tokens.ts';
 
 export interface RenderOptions {
@@ -19,6 +19,8 @@ export interface RenderResult {
   title: string;
   headings: Heading[];
   images: string[];
+  description: string | null;
+  words: number;
 }
 
 const escapeHtml = (s: string) =>
@@ -37,7 +39,21 @@ export function render(markdown: string, opts: RenderOptions): RenderResult {
   if (f.depth) metaBits.push(`<span>${escapeHtml(String(f.depth))} depth</span>`);
   if (f.level) metaBits.push(`<span>Level: ${escapeHtml(String(f.level))}</span>`);
   if (f.built) metaBits.push(`<span>Built ${escapeHtml(String(f.built))}</span>`);
+  const minutes = Math.max(1, Math.round(body.words / 230));
+  metaBits.push(`<span>${minutes} min read</span>`);
   const meta = metaBits.length ? `<div class="doc-meta">${metaBits.join('')}</div>` : '';
+  // Printed (PDF) copies lose hover and clicks, so the source links are listed at the end in print.
+  const refs = body.refs.length
+    ? `<section class="print-refs"><h2>Source links</h2><ol>${body.refs
+        .map(
+          (r) =>
+            `<li><span class="ref-id">${escapeHtml(r.id)}</span> <a href="${escapeHtml(r.url)}">${escapeHtml(r.url)}</a></li>`,
+        )
+        .join('')}</ol></section>`
+    : '';
+  const katexCss = body.usesMath
+    ? `<link rel="stylesheet" href="${opts.assetsHref}/katex/katex.min.css">\n`
+    : '';
 
   const html = `<!doctype html>
 <html lang="en">
@@ -49,19 +65,27 @@ export function render(markdown: string, opts: RenderOptions): RenderResult {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${GOOGLE_FONTS_HREF}">
-<style>${documentCss}</style>
+${katexCss}<style>${documentCss}</style>
 </head>
 <body>
 <main id="doc">
 ${meta}
 ${body.bodyHtml}
+${refs}
 </main>
 <script>window.STUDYO = ${JSON.stringify({ headings: body.headings, mermaid: body.usesMermaid ? `${opts.assetsHref}/mermaid.min.js` : null, version: RENDERER_VERSION }).replace(/</g, '\\u003c')};</script>
 <script>${READER_SCRIPT}</script>
 </body>
 </html>
 `;
-  return { html, title: body.title, headings: body.headings, images: body.images };
+  return {
+    html,
+    title: body.title,
+    headings: body.headings,
+    images: body.images,
+    description: body.description,
+    words: body.words,
+  };
 }
 
 /**
@@ -94,6 +118,11 @@ export function writeSharedAssets(dir: string) {
   mkdirSync(dir, { recursive: true });
   const require = createRequire(import.meta.url);
   copyFileSync(require.resolve('mermaid/dist/mermaid.min.js'), join(dir, 'mermaid.min.js'));
+  // KaTeX's stylesheet and fonts, so maths renders offline and in printed PDFs.
+  const katexDist = dirname(require.resolve('katex/dist/katex.min.css'));
+  mkdirSync(join(dir, 'katex'), { recursive: true });
+  copyFileSync(join(katexDist, 'katex.min.css'), join(dir, 'katex', 'katex.min.css'));
+  cpSync(join(katexDist, 'fonts'), join(dir, 'katex', 'fonts'), { recursive: true });
   writeFileSync(stamp, RENDERER_VERSION);
 }
 
@@ -175,7 +204,7 @@ const READER_SCRIPT = `
         var s = document.createElement('script'); s.src = S.mermaid; s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
       });
     }
-    mermaidLoaded.then(function () {
+    return mermaidLoaded.then(function () {
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
         if (!b.dataset.source) b.dataset.source = b.textContent;
@@ -198,8 +227,10 @@ const READER_SCRIPT = `
     }).catch(function () {});
   }
 
+  function markReady() { root.setAttribute('data-studyo-ready', '1'); }
   window.addEventListener('load', function () {
-    renderMermaid();
+    var pending = renderMermaid();
+    Promise.all([pending, document.fonts ? document.fonts.ready : null]).then(markReady, markReady);
     if (location.hash.length > 1) goto({ section: decodeURIComponent(location.hash.slice(1)), flash: true });
     post({ type: 'studyo:ready', headings: S.headings || [], version: S.version });
   });

@@ -42,6 +42,7 @@ export const radius = tokens.radius;
 export const hit = { min: 48, big: 56 } as const;
 export const MAX_WIDTH = 720;
 export const DOCK_HEIGHT = 68;
+export const TAB_HEIGHT = 60;
 
 interface Theme {
   scheme: Scheme;

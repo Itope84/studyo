@@ -18,6 +18,7 @@ export const keys = {
   topics: ['topics'] as const,
   topic: (id: string) => ['topic', id] as const,
   activeJobs: ['jobs', 'active'] as const,
+  allJobs: ['jobs', 'all'] as const,
   job: (id: string) => ['job', id] as const,
   chat: (id: string) => ['chat', id] as const,
   inbox: ['inbox'] as const,
@@ -35,6 +36,11 @@ export function applyJob(job: Job) {
     return { jobs: ACTIVE.has(job.status) ? [job, ...rest] : rest };
   });
   queryClient.setQueryData<JobDetail>(keys.job(job.id), (old) => (old ? { ...old, ...job } : old));
+  queryClient.setQueryData<JobList>(keys.allJobs, (old) => {
+    if (!old) return old;
+    const rest = old.jobs.filter((j) => j.id !== job.id);
+    return { jobs: [job, ...rest].sort((a, b) => b.created.localeCompare(a.created)) };
+  });
 }
 
 export function appendJobLog(jobId: string, line: JobDetail['log'][number]) {

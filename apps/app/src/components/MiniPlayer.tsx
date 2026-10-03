@@ -1,8 +1,9 @@
 import { router, usePathname } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useChrome } from '@/lib/chrome';
 import { skip, toggle, usePlayer } from '@/lib/player';
-import { DOCK_HEIGHT, MAX_WIDTH, space, useTheme } from '@/theme';
+import { DOCK_HEIGHT, MAX_WIDTH, space, TAB_HEIGHT, useTheme } from '@/theme';
 import { formatTime, IconButton, T } from './ui';
 
 /** Persistent dock while something plays. Hidden on the full player itself. */
@@ -10,11 +11,15 @@ export function MiniPlayer() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const path = usePathname();
+  const { tabs } = useChrome();
   const { track, playing, position, duration, buffering } = usePlayer();
   if (!track || path === '/player') return null;
   const fraction = duration > 0 ? position / duration : 0;
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { paddingBottom: insets.bottom }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.wrap, { paddingBottom: insets.bottom + (tabs ? TAB_HEIGHT : 0) }]}
+    >
       <View
         style={[
           styles.dock,

@@ -13,6 +13,12 @@ pnpm start          # builds the web app, then serves the API on :8787 and the a
 
 The server prints an access token and a **setup link**. Open the link on this Mac or on your phone (same Wi-Fi or Tailscale) and the app connects straight away. Your library is `library/` in this repo. The token is kept in `library/_studyo/token`.
 
+### Downloading for NotebookLM
+
+Every pack and condensed doc has a download button (in the topic's list and in the Reader's toolbar). **PDF** is printed on the server with diagrams, maths and a list of source links at the end. The first download takes a few seconds; after that it's cached until the document changes. **Markdown** is the source file as the skills wrote it. NotebookLM takes either.
+
+PDF printing uses Chromium. If the server says it isn't available, run `npx playwright install chromium` once on the server (or install Google Chrome).
+
 ### Without spending tokens
 
 ```bash

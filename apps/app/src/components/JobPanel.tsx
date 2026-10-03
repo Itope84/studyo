@@ -5,14 +5,14 @@ import { View } from 'react-native';
 import { api } from '@/lib/api';
 import { radius, space, useTheme } from '@/theme';
 import { Pulse } from './status';
-import { Button, Icon, T, timeAgo } from './ui';
+import { Button, Icon, ProgressBar, T, timeAgo } from './ui';
 
 export const jobLabel = (job: Job) =>
   ({
     enrich: 'Building your study pack',
     'enrich-deep': 'Going deeper',
     condense: 'Writing a condensed doc',
-    answer: 'Answering',
+    answer: 'Chat reply',
   })[job.kind];
 
 /** What the AI is doing on this topic right now, with the one action that matters. */
@@ -48,6 +48,14 @@ export function JobPanel({ job, online }: { job: Job; online: boolean }) {
           ? (job.questions?.title ?? 'A quick question before it continues')
           : (job.activity ?? 'Starting…')}
       </T>
+      {!waiting && job.step ? (
+        <View style={{ gap: 4 }}>
+          <ProgressBar value={job.step.n / job.step.of} height={3} />
+          <T variant="meta" tone="faint">
+            Step {job.step.n} of {job.step.of}
+          </T>
+        </View>
+      ) : null}
       {waiting && job.questions?.intro ? (
         <T variant="bodySmall" tone="lead">
           {job.questions.intro}

@@ -10,6 +10,7 @@ import type {
   Job,
   JobDetail,
   JobList,
+  Pdf,
   Profile,
   Progress,
   ProgressUpdate,
@@ -120,6 +121,8 @@ export const api = {
     request<Resource>('POST', `/topics/${enc(id)}/resources`, form),
   rendered: (id: string, rid: string) =>
     request<Rendered>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/rendered`),
+  pdf: (id: string, rid: string) =>
+    request<Pdf>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/pdf`),
   markRead: (id: string) => request<Profile>('POST', `/topics/${enc(id)}/mark-read`),
 
   progress: (id: string) => request<Progress>('GET', `/topics/${enc(id)}/progress`),
@@ -127,12 +130,14 @@ export const api = {
     request<Progress>('PUT', `/topics/${enc(id)}/progress`, u),
 
   startJob: (id: string, body: CreateJob) => request<Job>('POST', `/topics/${enc(id)}/jobs`, body),
-  jobs: (q: { active?: boolean; topic_id?: string } = {}) => {
+  jobs: (q: { active?: boolean; topic_id?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (q.active) params.set('active', 'true');
     if (q.topic_id) params.set('topic_id', q.topic_id);
+    if (q.limit) params.set('limit', String(q.limit));
     return request<JobList>('GET', `/jobs?${params}`);
   },
+
   job: (id: string) => request<JobDetail>('GET', `/jobs/${enc(id)}`),
   answer: (id: string, answers: AnswerSet) =>
     request<Job>('POST', `/jobs/${enc(id)}/answers`, answers),

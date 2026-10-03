@@ -7,7 +7,14 @@ import type { EventBus } from '../events.ts';
 import type { Library } from '../library.ts';
 import { renderTopic } from '../render.ts';
 import { conflict, nowIso } from '../util.ts';
-import { answersPrompt, parseAnswer, progressLines, SYSTEM, startPrompt } from './prompts.ts';
+import {
+  answersPrompt,
+  parseAnswer,
+  parseStep,
+  progressLines,
+  SYSTEM,
+  startPrompt,
+} from './prompts.ts';
 import { type JobRecord, type JobStore, publicJob } from './store.ts';
 
 const TIME_LIMIT_MIN: Record<JobKind, number> = {
@@ -227,8 +234,9 @@ export class Runner {
         case 'text': {
           store.log(job.id, 'text', e.text);
           for (const line of progressLines(e.text)) {
+            const { step, text } = parseStep(line);
             store.log(job.id, 'progress', line);
-            store.update(job.id, { activity: line });
+            store.update(job.id, step ? { activity: text, step } : { activity: text });
           }
           break;
         }

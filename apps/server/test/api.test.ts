@@ -45,6 +45,46 @@ describe('server basics', () => {
     expect((await s.app.request(`/f/${info.file_token}/_studyo/token`)).status).toBe(404);
   });
 
+  it('derives descriptions, read times, summary and progress', async () => {
+    s = await makeServer();
+    const detail = (await s.call('GET', '/topics/pc-ca-mcts')).json;
+    const pack = detail.topic.resources.find((r: { id: string }) => r.id === 'pack');
+    expect(pack.read_minutes).toBeGreaterThan(5);
+    expect(pack.description).toMatch(/original Cloudflare article/);
+    expect(detail.topic.summary).toBeTruthy();
+    await s.call('PUT', '/topics/pc-ca-mcts/progress', {
+      resource_id: 'pack',
+      position: 0.5,
+      updated: '2026-10-03T10:00:00Z',
+    });
+    const home = (await s.call('GET', '/topics')).json;
+    expectSchema('TopicList', home);
+    expect(home.topics[0].progress.fraction).toBeCloseTo(0.25, 2);
+  });
+
+  it('prints a document to PDF and serves it as a download', async () => {
+    s = await makeServer();
+    const res = await s.call('GET', '/topics/pc-ca-mcts/resources/condensed-all-2026-10-03/pdf');
+    if (res.status === 503) return; // no Chromium on this machine
+    expect(res.status).toBe(200);
+    expectSchema('Pdf', res.json);
+    expect(res.json.file_name).toBe('Merkle Tree Certificates in plain words.pdf');
+    const info = (await s.call('GET', '/server')).json;
+    const file = await s.app.request(
+      `/f/${info.file_token}/${res.json.pdf_path}?download=${encodeURIComponent(res.json.file_name)}`,
+    );
+    expect(file.status).toBe(200);
+    expect(file.headers.get('Content-Type')).toBe('application/pdf');
+    expect(file.headers.get('Content-Disposition')).toContain('attachment');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+    expect(bytes.length).toBeGreaterThan(20_000);
+    // A second request reuses the PDF.
+    const again = await s.call('GET', '/topics/pc-ca-mcts/resources/condensed-all-2026-10-03/pdf');
+    expect(again.json.pdf_path).toBe(res.json.pdf_path);
+    expect((await s.call('GET', '/topics/pc-ca-mcts/resources/S1/pdf')).status).toBe(422);
+  });
+
   it('answers Range requests', async () => {
     s = await makeServer();
     const res = await s.app.request('/files/topics/pc-ca-mcts/pack/assets/S1-fig1.png', {
@@ -108,6 +148,8 @@ describe('jobs', () => {
     });
     expectSchema('JobDetail', waiting);
     expect(waiting.questions.questions[0].kind).toBe('multi');
+    expect(waiting.step).toEqual({ n: 3, of: 9 });
+    expect(waiting.activity).not.toMatch(/^\d/);
     expect(
       waiting.log.some(
         (l: { kind: string; text: string }) => l.kind === 'progress' && l.text.includes('capture'),

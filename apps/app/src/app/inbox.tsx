@@ -55,7 +55,7 @@ export default function Inbox() {
   };
 
   return (
-    <Screen header={<Header title="Inbox" />}>
+    <Screen header={<Header title="Inbox" back={false} />}>
       <T variant="bodySmall" tone="lead" style={{ paddingTop: space.md }}>
         Files dropped into <T variant="mono">library/inbox/</T> on the server, or uploaded here,
         wait until you file them.

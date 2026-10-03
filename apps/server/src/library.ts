@@ -11,6 +11,7 @@ import type {
   TopicStatus,
   TopicSummary,
 } from '@studyo/api';
+import { docInfo } from '@studyo/renderer';
 import { parseFile } from 'music-metadata';
 import { HttpError, notFound, nowIso, readJson, slugify, today, writeJsonAtomic } from './util.ts';
 
@@ -92,6 +93,8 @@ export class Library {
     for (const r of stored.resources) {
       delete (r as Partial<Resource>).html_path;
       delete (r as Partial<Resource>).url;
+      delete (r as Partial<Resource>).description;
+      delete (r as Partial<Resource>).read_minutes;
     }
     writeJsonAtomic(join(this.topicDir(id), 'topic.json'), stored);
   }
@@ -116,13 +119,20 @@ export class Library {
     for (const r of manifest.resources) {
       if (!existsSync(join(dir, r.path))) continue;
       const htmlPath = r.path.replace(/\.md$/, '.html');
+      const isDoc = (r.type === 'pack' || r.type === 'condensed') && r.path.endsWith('.md');
+      const info = isDoc ? await docFacts(join(dir, r.path)) : null;
       resources.push({
         ...r,
         html_path: r.path.endsWith('.md') && existsSync(join(dir, htmlPath)) ? htmlPath : null,
         url: ledger.get(r.id) ?? ledger.get(r.path) ?? null,
+        description: info?.description ?? null,
+        read_minutes: info ? Math.max(1, Math.round(info.words / WORDS_PER_MINUTE)) : null,
       });
     }
-    return { ...manifest, resources };
+    const packInfo = resources.find((r) => r.type === 'pack')?.description ?? null;
+    const summary =
+      typeof manifest.summary === 'string' && manifest.summary.trim() ? manifest.summary : packInfo;
+    return { ...manifest, summary, resources };
   }
 
   async readProgress(id: string): Promise<Progress> {
@@ -206,14 +216,50 @@ export function summarise(topic: Topic, progress: Progress, activeJob: Job | nul
       docs: count(['pack', 'condensed']).length,
       media: count(['audio', 'video']).length,
     },
+    summary: topic.summary ?? null,
     progress: {
       done: trackable.filter((r) => progress.items[r.id]?.done).length,
       total: trackable.length,
+      fraction: trackable.length
+        ? trackable.reduce((sum, r) => sum + itemFraction(r, progress), 0) / trackable.length
+        : 0,
     },
     failure_reason: topic.failure_reason ?? null,
     active_job: activeJob,
     updated: topic.updated,
   };
+}
+
+const WORDS_PER_MINUTE = 230;
+
+/** How far through one item: a document's scroll fraction, or media position over duration. */
+function itemFraction(r: Resource, progress: Progress): number {
+  const item = progress.items[r.id];
+  if (!item) return 0;
+  if (item.done) return 1;
+  if (r.type === 'audio' || r.type === 'video') {
+    const duration = item.duration ?? r.duration ?? 0;
+    return duration > 0 ? Math.min(1, item.position / duration) : 0;
+  }
+  return Math.min(1, Math.max(0, item.position));
+}
+
+/** Description and length of a Markdown document, cached by modification time. */
+const factsCache = new Map<string, { mtime: number; description: string | null; words: number }>();
+async function docFacts(
+  path: string,
+): Promise<{ description: string | null; words: number } | null> {
+  try {
+    const { mtimeMs } = await stat(path);
+    const hit = factsCache.get(path);
+    if (hit && hit.mtime === mtimeMs) return hit;
+    const info = docInfo(await readFile(path, 'utf8'));
+    const value = { mtime: mtimeMs, description: info.description, words: info.words };
+    factsCache.set(path, value);
+    return value;
+  } catch {
+    return null;
+  }
 }
 
 function normaliseManifest(id: string, raw: Partial<Manifest>): Manifest {

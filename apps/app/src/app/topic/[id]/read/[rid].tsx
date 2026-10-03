@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { DocFrame } from '@/components/DocFrame';
 import type { DocFrameHandle, DocMessage } from '@/components/DocFrame.types';
+import { DownloadSheet } from '@/components/DownloadSheet';
 import { Sheet } from '@/components/Sheet';
 import { Header, IconButton, Loading, Notice, Row, Screen, T } from '@/components/ui';
 import { ApiError, api, fileUrl } from '@/lib/api';
@@ -23,6 +24,7 @@ export default function Reader() {
   const server = useServerInfo();
   const frame = useRef<DocFrameHandle>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [headings, setHeadings] = useState<{ id: string; depth: number; text: string }[]>([]);
   const [done, setDone] = useState(false);
   // The first theme goes in the URL; later changes are sent as messages, so the page doesn't reload.
@@ -123,6 +125,12 @@ export default function Reader() {
                 disabled={!headings.length}
               />
               <IconButton
+                name="file-download"
+                label="Download as PDF or Markdown"
+                onPress={() => setDownloadOpen(true)}
+                disabled={!resource}
+              />
+              <IconButton
                 name="forum"
                 label="Ask about this"
                 onPress={() => router.push(`/topic/${id}/chat`)}
@@ -161,6 +169,12 @@ export default function Reader() {
           )}
         </View>
       )}
+      <DownloadSheet
+        open={downloadOpen}
+        onClose={() => setDownloadOpen(false)}
+        topicId={id}
+        resource={resource ?? null}
+      />
       <Sheet open={outlineOpen} onClose={() => setOutlineOpen(false)} title="Outline">
         {headings
           .filter((h) => h.depth <= 3)

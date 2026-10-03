@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Linking, View } from 'react-native';
+import { DownloadSheet } from '@/components/DownloadSheet';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
 import { Sheet } from '@/components/Sheet';
@@ -41,6 +42,7 @@ export default function TopicScreen() {
   const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more'>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [download, setDownload] = useState<Resource | null>(null);
 
   if (!q.data) {
     return (
@@ -135,6 +137,11 @@ export default function TopicScreen() {
         <T variant="display" accessibilityRole="header">
           {topic.title}
         </T>
+        {topic.summary ? (
+          <T variant="body" tone="lead">
+            {topic.summary}
+          </T>
+        ) : null}
         <OriginLine topic={topic} />
       </View>
 
@@ -241,7 +248,14 @@ export default function TopicScreen() {
         </T>
       ) : (
         docs.map((r) => (
-          <DocRow key={r.id} topicId={id} r={r} progress={progress} online={online} />
+          <DocRow
+            key={r.id}
+            topicId={id}
+            r={r}
+            progress={progress}
+            online={online}
+            onDownload={() => setDownload(r)}
+          />
         ))
       )}
 
@@ -330,6 +344,12 @@ export default function TopicScreen() {
           })
         }
       />
+      <DownloadSheet
+        open={!!download}
+        onClose={() => setDownload(null)}
+        topicId={id}
+        resource={download}
+      />
       <RenameSheet open={sheet === 'rename'} onClose={() => setSheet(null)} topic={topic} />
       <CondenseSheet
         open={sheet === 'condense'}
@@ -401,11 +421,13 @@ function DocRow({
   r,
   progress,
   online,
+  onDownload,
 }: {
   topicId: string;
   r: Resource;
   progress: Progress;
   online: boolean;
+  onDownload: () => void;
 }) {
   const item = progress.items[r.id];
   const fraction = item?.done ? 1 : (item?.position ?? 0);
@@ -421,15 +443,28 @@ function DocRow({
       }
       subtitle={
         <View style={{ gap: 6 }}>
+          {r.description ? (
+            <T variant="bodySmall" tone="lead" numberOfLines={2}>
+              {r.description}
+            </T>
+          ) : null}
           <T variant="meta" tone="lead">
             {r.type === 'pack' ? 'Study pack' : 'Condensed doc'}
-            {r.made_with ? ` · ${r.made_with.split(',')[0]}` : ''}
+            {r.read_minutes ? ` · ${r.read_minutes} min read` : ''}
             {item?.done ? ' · Read' : item ? ` · ${Math.round(fraction * 100)}% read` : ''}
           </T>
           {item && !item.done ? <ProgressBar value={fraction} /> : null}
         </View>
       }
       meta={item?.done ? <Icon name="check-circle" size={18} tone="sage" /> : undefined}
+      trailing={
+        <IconButton
+          name="file-download"
+          label={`Download ${r.title}`}
+          onPress={onDownload}
+          disabled={!online}
+        />
+      }
       onPress={() => router.push(`/topic/${topicId}/read/${r.id}`)}
       disabled={!online}
       disabledReason="Needs the server"

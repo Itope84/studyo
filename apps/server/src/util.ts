@@ -5,7 +5,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 404 | 409 | 413 | 416 | 422 | 500,
+    readonly status: 400 | 401 | 404 | 409 | 413 | 416 | 422 | 500 | 503,
     readonly code: string,
     message: string,
   ) {

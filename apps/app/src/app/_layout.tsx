@@ -15,6 +15,8 @@ import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/MiniPlayer';
+import { TabBar } from '@/components/TabBar';
+import { useChrome } from '@/lib/chrome';
 import { events, watchForeground } from '@/lib/live';
 import { usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
@@ -26,6 +28,7 @@ function Shell() {
   const { c, scheme } = useTheme();
   const connection = usePrefs((s) => s.connection);
   const pathname = usePathname();
+  const { tabs } = useChrome();
 
   // Without a server there is nothing to show: any deep link goes to Connect first.
   useEffect(() => {
@@ -75,6 +78,7 @@ function Shell() {
         />
       </Stack>
       <MiniPlayer />
+      {connection && tabs ? <TabBar /> : null}
     </View>
   );
 }

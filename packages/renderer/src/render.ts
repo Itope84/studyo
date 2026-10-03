@@ -1,12 +1,14 @@
 import GithubSlugger from 'github-slugger';
 import type { Element, ElementContent, Root as HastRoot } from 'hast';
-import type { Code, Html, Image, Paragraph, Root, RootContent } from 'mdast';
+import type { Code, Definition, Html, Image, Link, Paragraph, Root, RootContent } from 'mdast';
 import { toString as mdToString } from 'mdast-util-to-string';
+import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeStringify from 'rehype-stringify';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
@@ -15,7 +17,7 @@ import { parse as parseYaml } from 'yaml';
 import { frameCss } from './styles.ts';
 import { sanitizeSvg } from './svg.ts';
 
-export const RENDERER_VERSION = '1.0.0';
+export const RENDERER_VERSION = '1.1.0';
 
 export interface Heading {
   id: string;
@@ -41,7 +43,13 @@ export interface RenderedBody {
   images: string[];
   bodyHtml: string;
   usesMermaid: boolean;
+  usesMath: boolean;
   frames: number;
+  /** Source ids and their URLs, from `[S3]: url` definitions and `[S3](url)` links, for the printed link list. */
+  refs: { id: string; url: string }[];
+  /** Front matter `description`, or the first paragraph, shortened. */
+  description: string | null;
+  words: number;
 }
 
 export class RenderError extends Error {}
@@ -99,7 +107,11 @@ export function renderBody(markdown: string): RenderedBody {
   const slugger = new GithubSlugger();
 
   const parseFragment = (md: string): RootContent[] => {
-    const tree = unified().use(remarkParse).use(remarkGfm).parse(md) as Root;
+    const tree = unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(remarkMath)
+      .parse(protectDollars(md)) as Root;
     transformBlocks(tree.children);
     return tree.children;
   };
@@ -277,12 +289,34 @@ export function renderBody(markdown: string): RenderedBody {
     }
   };
 
-  const processor = unified().use(remarkParse).use(remarkGfm).use(remarkFrontmatter, ['yaml']);
-  const mdast = processor.parse(markdown) as Root;
+  const processor = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkFrontmatter, ['yaml']);
+  const mdast = processor.parse(protectDollars(markdown)) as Root;
+  const description = describe(mdast);
+  const words = mdToString(mdast).split(/\s+/).filter(Boolean).length;
   transformBlocks(mdast.children);
   visit(mdast, 'image', (img: Image) => {
     if (!/^(?:[a-z]+:)?\/\//i.test(img.url) && !img.url.startsWith('data:')) images.push(img.url);
   });
+  let usesMath = false;
+  visit(mdast, (n) => {
+    if (n.type === 'math' || n.type === 'inlineMath') usesMath = true;
+  });
+  const refMap = new Map<string, string>();
+  visit(mdast, 'definition', (d: Definition) => {
+    const id = (d.label ?? d.identifier).trim();
+    if (/^S\d+$/i.test(id) && /^https?:/.test(d.url)) refMap.set(id.toUpperCase(), d.url);
+  });
+  visit(mdast, 'link', (l: Link) => {
+    const id = /^\s*(S\d+)\b/i.exec(mdToString(l))?.[1]?.toUpperCase();
+    if (id && /^https?:/.test(l.url) && !refMap.has(id)) refMap.set(id, l.url);
+  });
+  const refs = [...refMap.entries()]
+    .map(([id, url]) => ({ id, url }))
+    .sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
 
   const title =
     headings.find((h) => h.depth === 1)?.text ?? (front.topic as string | undefined) ?? 'Untitled';
@@ -332,6 +366,8 @@ export function renderBody(markdown: string): RenderedBody {
     .use(rehypeRaw)
     .use(rehypeSanitize, schema)
     .runSync(mdast) as HastRoot;
+  // Maths after sanitising: KaTeX's own markup is trusted, the document's raw HTML is not.
+  if (usesMath) unified().use(rehypeKatex, { strict: 'ignore' }).runSync(hast);
 
   let frames = 0;
   visit(hast, 'element', (node: Element, index, parent) => {
@@ -382,7 +418,19 @@ export function renderBody(markdown: string): RenderedBody {
   });
 
   const bodyHtml = unified().use(rehypeStringify).stringify(hast);
-  return { title, front, headings, images, bodyHtml, usesMermaid, frames };
+  return {
+    title,
+    front,
+    headings,
+    images,
+    bodyHtml,
+    usesMermaid,
+    usesMath,
+    frames,
+    refs,
+    description: typeof front.description === 'string' ? front.description : description,
+    words,
+  };
 }
 
 function figureParts(p: Paragraph): { image: Image; credit: RootContent | null } | null {
@@ -417,4 +465,75 @@ function toPlain(node: ElementContent): string {
 /** The document a sandboxed free-form HTML block runs in: tokens, fonts and an auto-height reporter. */
 function frameDocument(html: string, id: number): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${frameCss}</style></head><body>${html}<script>(function(){var send=function(){parent.postMessage({type:'studyo:frame-height',id:${id},height:document.documentElement.scrollHeight},'*')};new ResizeObserver(send).observe(document.documentElement);window.addEventListener('load',send);addEventListener('message',function(e){if(e.data&&e.data.type==='studyo:theme'){document.documentElement.setAttribute('data-theme',e.data.theme)}});})();</script></body></html>`;
+}
+
+/**
+ * Pandoc's rule for `$…$` maths: the opening `$` is followed by a non-space, the closing one is preceded by a
+ * non-space and not followed by a digit. Any other `$` (prices: "$5 and $10") is escaped so it stays text.
+ * Fenced and inline code are left alone. `$$…$$` is untouched.
+ */
+export function protectDollars(md: string): string {
+  const parts = md.split(/(^```[\s\S]*?^```|^~~~[\s\S]*?^~~~)/m);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part;
+      return part.replace(
+        /(`+)[\s\S]*?\1|\$\$[\s\S]*?\$\$|(?<!\\)\$(?=\S)[^$\n]*?[^\s\\]\$(?!\d)|(?<!\\)\$/g,
+        (m) => (m === '$' ? '\\$' : m),
+      );
+    })
+    .join('');
+}
+
+/** The first real paragraph after the title, as plain text, cut to about 220 characters. */
+function describe(root: Root): string | null {
+  let seenTitle = false;
+  for (const node of root.children) {
+    if (node.type === 'heading' && node.depth === 1) {
+      seenTitle = true;
+      continue;
+    }
+    if (node.type === 'heading' && seenTitle) break;
+    if (node.type === 'paragraph') {
+      let text = mdToString(node);
+      // Drop citations like "(S1)", "((S2, §1))" and the brackets they leave behind.
+      for (let i = 0; i < 3; i++)
+        text = text.replace(/\(\s*S\d+[^()]*\)/g, '').replace(/\(\s*\)/g, '');
+      text = text
+        .replace(/\s+([,.;:])/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text.length < 40) continue;
+      if (text.length <= 220) return text;
+      const cut = text.slice(0, 220);
+      return `${cut.slice(0, cut.lastIndexOf(' '))}…`;
+    }
+  }
+  return null;
+}
+
+/** Cheap facts about a document for lists (no HTML): its description and word count. */
+export function docInfo(markdown: string): {
+  description: string | null;
+  words: number;
+  title: string | null;
+} {
+  const tree = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkFrontmatter, ['yaml'])
+    .parse(markdown) as Root;
+  let front: FrontMatter = {};
+  const yaml = tree.children.find((n) => n.type === 'yaml');
+  if (yaml && yaml.type === 'yaml') {
+    try {
+      front = (parseYaml(yaml.value) as FrontMatter) ?? {};
+    } catch {}
+  }
+  const h1 = tree.children.find((n) => n.type === 'heading' && n.depth === 1);
+  return {
+    description: typeof front.description === 'string' ? front.description : describe(tree),
+    words: mdToString(tree).split(/\s+/).filter(Boolean).length,
+    title: h1 ? mdToString(h1) : null,
+  };
 }

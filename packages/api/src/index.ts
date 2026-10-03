@@ -24,6 +24,7 @@ export type TopicWithJob = S['TopicWithJob'];
 export type CreateTopic = S['CreateTopic'];
 export type UpdateTopic = S['UpdateTopic'];
 export type Rendered = S['Rendered'];
+export type Pdf = S['Pdf'];
 export type ProgressItem = S['ProgressItem'];
 export type Progress = S['Progress'];
 export type ProgressUpdate = S['ProgressUpdate'];

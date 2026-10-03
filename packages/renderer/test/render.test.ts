@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RENDERER_VERSION, RenderError, render, renderFile } from '../src/index.ts';
+import { protectDollars, RENDERER_VERSION, RenderError, render, renderFile } from '../src/index.ts';
 
 const opts = { assetsHref: '../../../_studyo/assets' };
 const FIXTURE = resolve(import.meta.dirname, '../../../fixtures/library');
@@ -83,5 +83,36 @@ describe('render', () => {
   it('gives headings stable ids', () => {
     const a = render('# One\n\n## Two words\n\n## Two words', opts);
     expect(a.headings.map((h) => h.id)).toEqual(['one', 'two-words', 'two-words-1']);
+  });
+
+  it('renders inline and display maths with KaTeX', () => {
+    const { html } = render(
+      '# M\n\nScale by $\\sqrt{d_k}$ here.\n\n$$\n\\mathrm{softmax}(QK^T)V\n$$\n',
+      opts,
+    );
+    expect(html).toContain('class="katex"');
+    expect(html).toContain('katex-display');
+    expect(html).toContain('katex/katex.min.css');
+  });
+
+  it('keeps prices as text, not maths', () => {
+    expect(protectDollars('It costs $5 and $10 a month.')).toBe('It costs \\$5 and \\$10 a month.');
+    expect(protectDollars('Inline $x^2$ stays, `$code$` stays.')).toBe(
+      'Inline $x^2$ stays, `$code$` stays.',
+    );
+    const { html } = render('# P\n\nIt costs $5 and $10 a month.', opts);
+    expect(html).not.toContain('class="katex"');
+    expect(html).toContain('$5 and $10');
+  });
+
+  it('lists source links for print, and reports description and length', () => {
+    const r = render(
+      '# T\n\nThis first paragraph explains what the document is about in enough words to be a description. ([S2](https://example.com/two))\n\nMore [S1].\n\n[S1]: https://example.com/one\n',
+      opts,
+    );
+    expect(r.html).toMatch(/class="print-refs".*S1.*example\.com\/one.*S2.*example\.com\/two/s);
+    expect(r.description).toMatch(/^This first paragraph explains/);
+    expect(r.description).not.toContain('S2');
+    expect(r.words).toBeGreaterThan(15);
   });
 });

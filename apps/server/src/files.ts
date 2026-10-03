@@ -9,6 +9,7 @@ export async function serveFile(
   root: string,
   rel: string,
   rangeHeader: string | undefined,
+  download?: string | null,
 ): Promise<Response> {
   if (rel.split('/').some((p) => p === '..')) throw notFound('File');
   // Only server state is off limits; underscore folders inside topics hold assets the Reader needs.
@@ -26,6 +27,12 @@ export async function serveFile(
     'Last-Modified': info.mtime.toUTCString(),
     'Cache-Control': type === 'text/html' ? 'no-cache' : 'private, max-age=300',
   };
+  if (download) {
+    const ascii = download.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');
+    headers['Content-Disposition'] =
+      `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(download)}`;
+    headers['Cache-Control'] = 'no-cache';
+  }
 
   if (rangeHeader) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());

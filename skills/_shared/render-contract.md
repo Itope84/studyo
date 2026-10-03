@@ -13,6 +13,7 @@ kind: pack | condensed
 built: YYYY-MM-DD
 depth: standard | deep        # packs
 scope: all | <section ids>    # condensed
+description: <one or two sentences>   # optional; shown in the app's document list. Defaults to the first paragraph
 ---
 ```
 
@@ -49,6 +50,10 @@ Fenced blocks the renderer turns into components. **Prefer a component.** Reach 
 A fenced block whose info string has `key=value` pairs is treated as a directive; an unknown one makes rendering fail, so stick to the list above. Ordinary code blocks (` ```python `) stay code.
 
 Citations are reference-style links: `[S3]` in the text and `[S3]: url` definitions at the end of the file. The renderer shows them as references.
+
+### Maths
+
+`$…$` for inline maths and `$$` on their own lines for display maths, in LaTeX (KaTeX). A `$` followed by a space or used for a price stays text, so "$5" is safe. Use maths only where a source states the formula. Cite it in the sentence around it.
 
 Anything else is plain Markdown: headings, lists, tables, blockquotes, links.
 

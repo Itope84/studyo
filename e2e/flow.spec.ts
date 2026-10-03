@@ -52,7 +52,7 @@ test('add a link, answer the level question, read the new pack', async ({ page }
 
 test('ask in chat and get a cited answer with an enrich offer', async ({ page }) => {
   await connect(page);
-  await v(page.getByText('Building a post-quantum CA')).click();
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
   await v(page.getByRole('button', { name: 'Ask about this topic' })).click();
   await v(page.getByLabel('Your question')).fill('What replaces the certificate chain?');
   await v(page.getByRole('button', { name: 'Send' })).click();
@@ -66,7 +66,7 @@ test('ask in chat and get a cited answer with an enrich offer', async ({ page })
 
 test('play audio and open the full player from the dock', async ({ page }) => {
   await connect(page);
-  await v(page.getByText('Building a post-quantum CA')).click();
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
   await v(page.getByRole('button', { name: /^Play Deep dive/ })).click();
   await expect(v(page.getByRole('button', { name: /Open player/ }))).toBeVisible({
     timeout: 10_000,
@@ -110,4 +110,27 @@ test('closing the app mid-job and reopening it shows the waiting question', asyn
   await v(again.getByText('Studyo has a question')).click();
   await expect(v(again.getByText('Which of these do you already understand?'))).toBeVisible();
   await context.close();
+});
+
+test('download a document as PDF for NotebookLM', async ({ page }) => {
+  await connect(page);
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+  await v(page.getByRole('button', { name: /^Download Merkle Tree Certificates/ })).click();
+  await expect(v(page.getByText('Best for NotebookLM'))).toBeVisible();
+  await shot(page, '12-download-sheet');
+  const download = page.waitForEvent('download', { timeout: 60_000 });
+  await v(page.getByText('PDF', { exact: true })).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('Merkle Tree Certificates in plain words.pdf');
+  const path = await file.path();
+  const { readFileSync } = await import('node:fs');
+  expect(readFileSync(path).subarray(0, 5).toString()).toBe('%PDF-');
+});
+
+test('the tab bar reaches Activity, which shows a waiting question', async ({ page }) => {
+  await connect(page);
+  await v(page.getByRole('tab', { name: /Activity/ })).click();
+  await expect(v(page.getByText('Packs and docs'))).toBeVisible();
+  await v(page.getByRole('tab', { name: /Library/ })).click();
+  await expect(v(page.getByRole('button', { name: 'Add topic' }))).toBeVisible();
 });

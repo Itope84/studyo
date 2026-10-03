@@ -55,6 +55,14 @@ export function useActiveJobs() {
   });
 }
 
+export function useAllJobs() {
+  return useQuery({
+    queryKey: keys.allJobs,
+    queryFn: () => track(api.jobs({ limit: 100 })),
+    enabled: useConnected(),
+  });
+}
+
 export function useJob(id: string | null) {
   return useQuery({
     queryKey: keys.job(id ?? ''),

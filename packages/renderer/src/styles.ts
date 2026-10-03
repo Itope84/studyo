@@ -112,6 +112,35 @@ iframe.freeform-html { width: 100%; border: 1px solid var(--rule); border-radius
 details { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 14px; margin: 0 0 18px; }
 summary { cursor: pointer; font-family: ${tokens.font.apparatus}; font-size: 14px; font-weight: 500; }
 
+/* Maths */
+.katex { font-size: 1.04em; }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; margin: 0 0 18px; }
+
+/* The source link list only appears in print (PDF), where links can't be clicked. */
+.print-refs { display: none; }
+
+/* Printing and PDF export: always light, A4, nothing split awkwardly across pages. */
+@page { size: A4; margin: 18mm 16mm 20mm; }
+@media print {
+  :root, :root[data-theme="dark"] { ${light} color-scheme: light; }
+  html, body { background: #fff; }
+  body { font-size: 11.5pt; line-height: 1.5; }
+  main { max-width: none; padding: 0; }
+  h1 { font-size: 24pt; }
+  h2 { font-size: 17pt; margin-top: 26pt; }
+  h3 { font-size: 13.5pt; }
+  h2, h3, h4 { break-after: avoid; }
+  .callout, figure, table, pre, .diagram, .katex-display, blockquote, .added-note { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+  a.cite { background: none; padding: 0; }
+  .print-refs { display: block; break-before: page; }
+  .print-refs ol { list-style: none; padding: 0; font-size: 9.5pt; line-height: 1.5; }
+  .print-refs li { margin: 0 0 4pt; word-break: break-all; }
+  .print-refs .ref-id { font-family: ${tokens.font.apparatus}; font-weight: 600; color: var(--sage); margin-right: 6pt; }
+  .print-refs a { text-decoration: underline; }
+  .flash { animation: none; }
+}
+
 /* Highlight when jumping to a section from chat */
 .flash { animation: flash 1.6s ease-out; }
 @keyframes flash { 0% { background: var(--primary-soft); } 100% { background: transparent; } }

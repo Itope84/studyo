@@ -17,6 +17,7 @@ interface JobRow {
   pending_input: string | null;
   error: string | null;
   suggest_enrich: string | null;
+  step: string | null;
   session_id: string | null;
   created: string;
   started: string | null;
@@ -41,6 +42,7 @@ const toRecord = (r: JobRow): JobRecord => ({
   questions: r.questions ? (JSON.parse(r.questions) as QuestionSet) : null,
   error: r.error,
   suggest_enrich: r.suggest_enrich,
+  step: r.step ? JSON.parse(r.step) : null,
   created: r.created,
   started: r.started,
   finished: r.finished,
@@ -126,7 +128,11 @@ export class JobStore {
     if (cols.length) {
       const values = cols.map((c) => {
         const v = (patch as Record<string, unknown>)[c];
-        return c === 'questions' ? (v ? JSON.stringify(v) : null) : (v as string | null);
+        return c === 'questions' || c === 'step'
+          ? v
+            ? JSON.stringify(v)
+            : null
+          : (v as string | null);
       });
       this.db
         .prepare(`UPDATE jobs SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`)

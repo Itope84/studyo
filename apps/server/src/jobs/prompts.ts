@@ -71,6 +71,16 @@ export function parseAnswer(text: string): { text: string; suggest: string | nul
   return { text: text.replace(SUGGEST, '').trim(), suggest: (match[1] ?? '').trim() };
 }
 
+/** Split "6/9 sources: …" into the step and the text. */
+export function parseStep(line: string): { step: { n: number; of: number } | null; text: string } {
+  const m = /^(\d{1,2})\s*\/\s*(\d{1,2})\s+(.+)$/.exec(line);
+  if (!m) return { step: null, text: line };
+  const n = Number(m[1]);
+  const of = Number(m[2]);
+  if (!of || n > of) return { step: null, text: line };
+  return { step: { n, of }, text: m[3] as string };
+}
+
 /** A `[studyo] ...` progress line, without the prefix. NEEDS_INPUT and FAILED are handled elsewhere. */
 export function progressLines(text: string): string[] {
   const out: string[] = [];

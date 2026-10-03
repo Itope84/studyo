@@ -221,6 +221,37 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /topics/{topic_id}/resources/{resource_id}/pdf:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [topics]
+      summary: Make sure a pack or condensed doc has a fresh PDF, and return where it is
+      description: |
+        Prints the rendered page to PDF (light theme, A4, diagrams and maths included) and saves it next to the
+        Markdown. Re-made when the Markdown or the renderer changes. Download it with
+        `/f/{file_token}/{pdf_path}?download=<file name>`, which sends it as an attachment.
+      operationId: getPdf
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pdf' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: The document could not be rendered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: PDF printing is not available on this server (no Chromium)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /topics/{topic_id}/mark-read:
     parameters:
       - $ref: '#/components/parameters/TopicId'
@@ -245,6 +276,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/FilePath'
         - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/Download'
       responses:
         '200': { $ref: '#/components/responses/File' }
         '206': { $ref: '#/components/responses/PartialFile' }
@@ -269,6 +301,7 @@ paths:
           schema: { type: string }
         - $ref: '#/components/parameters/FilePath'
         - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/Download'
       responses:
         '200': { $ref: '#/components/responses/File' }
         '206': { $ref: '#/components/responses/PartialFile' }
@@ -642,6 +675,11 @@ components:
       required: true
       description: Path relative to the library root, for example `topics/pc-ca-mcts/pack/pack.html`. May contain slashes.
       schema: { type: string }
+    Download:
+      name: download
+      in: query
+      description: Send the file as an attachment with this file name, instead of inline.
+      schema: { type: string }
     Range:
       name: Range
       in: header
@@ -781,6 +819,14 @@ components:
         url:
           type: [string, 'null']
           description: Derived by the server. For a source saved from the web, its original URL (from the ledger).
+        description:
+          type: [string, 'null']
+          description: |
+            Derived by the server for packs and condensed docs: the front matter `description`, or else the first
+            paragraph, shortened.
+        read_minutes:
+          type: [integer, 'null']
+          description: Derived by the server for packs and condensed docs, at about 230 words a minute.
 
     Learning:
       type: object
@@ -816,6 +862,9 @@ components:
             - $ref: '#/components/schemas/Learning'
             - type: 'null'
         failure_reason: { type: [string, 'null'] }
+        summary:
+          type: [string, 'null']
+          description: One sentence on what the topic is. Written by the enrich skills; falls back to the pack's description.
         created: { type: string }
         updated: { type: string }
 
@@ -834,12 +883,16 @@ components:
             sources: { type: integer }
             docs: { type: integer, description: Pack plus condensed docs }
             media: { type: integer }
+        summary: { type: [string, 'null'] }
         progress:
           type: object
-          required: [done, total]
+          required: [done, total, fraction]
           properties:
             done: { type: integer, description: Docs and media marked done }
             total: { type: integer }
+            fraction:
+              type: number
+              description: How far through the topic's docs and media, 0–1 (each item weighted equally)
         failure_reason: { type: [string, 'null'] }
         active_job:
           oneOf:
@@ -915,6 +968,13 @@ components:
           type: array
           description: Resource ids in the new order. Ids not listed keep their relative order at the end.
           items: { type: string }
+
+    Pdf:
+      type: object
+      required: [pdf_path, file_name]
+      properties:
+        pdf_path: { type: string, description: Relative to the library root }
+        file_name: { type: string, description: 'A readable file name for downloading, from the document title' }
 
     Rendered:
       type: object
@@ -1004,6 +1064,15 @@ components:
         activity:
           type: [string, 'null']
           description: The latest human-readable progress line
+        step:
+          description: Where the skill is in its numbered steps, from progress lines like `[studyo] 6/9 sources …`
+          oneOf:
+            - type: object
+              required: [n, of]
+              properties:
+                n: { type: integer }
+                of: { type: integer }
+            - type: 'null'
         questions:
           oneOf:
             - $ref: '#/components/schemas/QuestionSet'

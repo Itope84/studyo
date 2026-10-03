@@ -35,6 +35,7 @@ import { inboxKind, listInbox } from './inbox.ts';
 import { Runner } from './jobs/runner.ts';
 import { type JobRecord, JobStore, publicJob } from './jobs/store.ts';
 import { Library, mediaTypeFor, titleFromFilename } from './library.ts';
+import { closePdfBrowser, ensurePdf } from './pdf.ts';
 import { markRead, readProfile, writeProfile } from './profile.ts';
 import { Push } from './push.ts';
 import { ensureRendered } from './render.ts';
@@ -355,6 +356,21 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return c.json(ensureRendered(library, id, resource));
   });
 
+  app.get('/topics/:id/resources/:rid/pdf', async (c) => {
+    const id = c.req.param('id');
+    const topic = await library.readTopic(id, { persist: false });
+    const resource = topic.resources.find((r) => r.id === c.req.param('rid'));
+    if (!resource) throw notFound('Document');
+    if (resource.type !== 'pack' && resource.type !== 'condensed') {
+      throw new HttpError(
+        422,
+        'not_a_document',
+        'Only packs and condensed docs can be saved as PDF.',
+      );
+    }
+    return c.json(await ensurePdf(library, id, resource));
+  });
+
   app.post('/topics/:id/mark-read', async (c) => {
     const id = c.req.param('id');
     const topic = await library.readTopic(id, { persist: false });
@@ -366,7 +382,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
 
   app.get('/files/*', async (c) => {
     const rel = decodeURIComponent(c.req.path.slice('/files/'.length));
-    return serveFile(config.library, rel, c.req.header('Range'));
+    return serveFile(config.library, rel, c.req.header('Range'), c.req.query('download'));
   });
 
   app.get('/f/:token/*', async (c) => {
@@ -377,7 +393,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     }
     const prefix = `/f/${c.req.param('token')}/`;
     const rel = decodeURIComponent(c.req.path.slice(prefix.length));
-    return serveFile(config.library, rel, c.req.header('Range'));
+    return serveFile(config.library, rel, c.req.header('Range'), c.req.query('download'));
   });
 
   // ---- Progress -------------------------------------------------------------
@@ -675,6 +691,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   });
 
   const close = () => {
+    void closePdfBrowser();
     runner.stop();
     stopWatch();
     db.close();

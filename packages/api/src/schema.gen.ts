@@ -140,6 +140,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topics/{topic_id}/resources/{resource_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                resource_id: components["parameters"]["ResourceId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Make sure a pack or condensed doc has a fresh PDF, and return where it is
+         * @description Prints the rendered page to PDF (light theme, A4, diagrams and maths included) and saves it next to the
+         *     Markdown. Re-made when the Markdown or the renderer changes. Download it with
+         *     `/f/{file_token}/{pdf_path}?download=<file name>`, which sends it as an attachment.
+         */
+        get: operations["getPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topics/{topic_id}/mark-read": {
         parameters: {
             query?: never;
@@ -520,6 +545,13 @@ export interface components {
             html_path?: string | null;
             /** @description Derived by the server. For a source saved from the web, its original URL (from the ledger). */
             url?: string | null;
+            /**
+             * @description Derived by the server for packs and condensed docs: the front matter `description`, or else the first
+             *     paragraph, shortened.
+             */
+            description?: string | null;
+            /** @description Derived by the server for packs and condensed docs, at about 230 words a minute. */
+            read_minutes?: number | null;
         };
         Learning: {
             goal?: string;
@@ -539,6 +571,8 @@ export interface components {
             resources: components["schemas"]["Resource"][];
             learning?: components["schemas"]["Learning"] | null;
             failure_reason?: string | null;
+            /** @description One sentence on what the topic is. Written by the enrich skills; falls back to the pack's description. */
+            summary?: string | null;
             created: string;
             updated: string;
         };
@@ -553,10 +587,13 @@ export interface components {
                 docs: number;
                 media: number;
             };
+            summary?: string | null;
             progress: {
                 /** @description Docs and media marked done */
                 done: number;
                 total: number;
+                /** @description How far through the topic's docs and media, 0–1 (each item weighted equally) */
+                fraction: number;
             };
             failure_reason?: string | null;
             active_job?: components["schemas"]["Job"] | null;
@@ -600,6 +637,12 @@ export interface components {
             archived?: boolean;
             /** @description Resource ids in the new order. Ids not listed keep their relative order at the end. */
             resource_order?: string[];
+        };
+        Pdf: {
+            /** @description Relative to the library root */
+            pdf_path: string;
+            /** @description A readable file name for downloading, from the document title */
+            file_name: string;
         };
         Rendered: {
             /** @description Relative to the library root */
@@ -667,6 +710,11 @@ export interface components {
             };
             /** @description The latest human-readable progress line */
             activity?: string | null;
+            /** @description Where the skill is in its numbered steps, from progress lines like `[studyo] 6/9 sources …` */
+            step?: {
+                n: number;
+                of: number;
+            } | null;
             questions?: components["schemas"]["QuestionSet"] | null;
             error?: string | null;
             /** @description For answer jobs, a focus the reply offered to enrich */
@@ -907,6 +955,8 @@ export interface components {
         JobId: string;
         /** @description Path relative to the library root, for example `topics/pc-ca-mcts/pack/pack.html`. May contain slashes. */
         FilePath: string;
+        /** @description Send the file as an attachment with this file name, instead of inline. */
+        Download: string;
         Range: string;
     };
     requestBodies: never;
@@ -1182,6 +1232,49 @@ export interface operations {
             };
         };
     };
+    getPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                resource_id: components["parameters"]["ResourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pdf"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The document could not be rendered */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PDF printing is not available on this server (no Chromium) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     markTopicRead: {
         parameters: {
             query?: never;
@@ -1208,7 +1301,10 @@ export interface operations {
     };
     getFile: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Send the file as an attachment with this file name, instead of inline. */
+                download?: components["parameters"]["Download"];
+            };
             header?: {
                 Range?: components["parameters"]["Range"];
             };
@@ -1235,7 +1331,10 @@ export interface operations {
     };
     getFileWithToken: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Send the file as an attachment with this file name, instead of inline. */
+                download?: components["parameters"]["Download"];
+            };
             header?: {
                 Range?: components["parameters"]["Range"];
             };

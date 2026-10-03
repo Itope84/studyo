@@ -4,7 +4,7 @@
       "delay": 300,
       "event": {
         "type": "text",
-        "text": "[studyo] level-check: 2 known, 3 gaps"
+        "text": "[studyo] 4/9 level-check: 2 known, 3 gaps"
       }
     },
     {
@@ -27,7 +27,7 @@
       "delay": 400,
       "event": {
         "type": "text",
-        "text": "[studyo] sources: 2 opened"
+        "text": "[studyo] 6/9 sources: 2 opened"
       }
     },
     {
@@ -75,14 +75,15 @@
             "size": 40,
             "added": "2026-10-03"
           }
-        ]
+        ],
+        "summary": "A demo pack written by the replay adapter."
       }
     },
     {
       "delay": 300,
       "event": {
         "type": "text",
-        "text": "[studyo] enrich-document: done. 2 sources opened, 1 background section, 0 gaps."
+        "text": "[studyo] 9/9 enrich-document: done. 2 sources opened, 1 background section, 0 gaps."
       }
     },
     {

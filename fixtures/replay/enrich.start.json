@@ -4,7 +4,7 @@
       "delay": 200,
       "event": {
         "type": "text",
-        "text": "[studyo] enrich-document: starting"
+        "text": "[studyo] 1/9 enrich-document: starting"
       }
     },
     {
@@ -19,7 +19,7 @@
       "delay": 400,
       "event": {
         "type": "text",
-        "text": "[studyo] capture: saved the original as S1"
+        "text": "[studyo] 2/9 capture: saved the original as S1"
       }
     },
     {
@@ -34,7 +34,7 @@
       "delay": 500,
       "event": {
         "type": "text",
-        "text": "[studyo] notes: 9 key terms"
+        "text": "[studyo] 3/9 notes: 9 key terms"
       }
     },
     {

@@ -36,6 +36,7 @@ Skills read it first and update it when they finish. Edit by reading the whole f
 - `resources`: add or update an entry for each file you produce, with `id`, `type` (`source` | `pack` | `condensed`), `title`, `path` (relative to the topic folder), `made_with` (the CLI and model name if known), `size`, `added`.
 - Add the `pack.html` and `condensed-*.html` files as the same resource as their `.md` source. They are renderings, not separate resources.
 - `learning`: `{goal, gaps, updated}`, written by `level-check`. Gaps are the concepts to explain for this topic.
+- `summary`: one plain sentence on what the topic is about, written by the enrich skills when they finish (for example "How log-structured storage engines trade read speed for fast writes."). The app shows it under the title.
 - `updated`: now, ISO 8601.
 - Do not change `id`, `origin` or `session_id`.
 

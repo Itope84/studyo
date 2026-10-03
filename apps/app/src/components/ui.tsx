@@ -14,8 +14,18 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePlayer } from '@/lib/player';
-import { DOCK_HEIGHT, fonts, hit, MAX_WIDTH, radius, space, type, useTheme } from '@/theme';
+import { useChrome } from '@/lib/chrome';
+import {
+  DOCK_HEIGHT,
+  fonts,
+  hit,
+  MAX_WIDTH,
+  radius,
+  space,
+  TAB_HEIGHT,
+  type,
+  useTheme,
+} from '@/theme';
 
 export type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -85,8 +95,10 @@ export function Screen({
 }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const hasDock = usePlayer((s) => !!s.track);
-  const bottom = (hasDock ? DOCK_HEIGHT + space.md : 0) + insets.bottom + space.lg;
+  const { tabs, dock } = useChrome();
+  // Room for whatever sits over the bottom of the page: tab bar, mini player, the home indicator.
+  const chrome = (tabs ? TAB_HEIGHT : 0) + (dock ? DOCK_HEIGHT : 0) + insets.bottom;
+  const bottom = chrome + space.lg;
   const column: ViewStyle = {
     width: '100%',
     maxWidth: wide ? 1080 : MAX_WIDTH,
@@ -110,11 +122,7 @@ export function Screen({
       ) : (
         <View style={[{ flex: 1 }, column, contentStyle]}>{children}</View>
       )}
-      {footer ? (
-        <View style={[column, { paddingBottom: hasDock ? DOCK_HEIGHT : insets.bottom }]}>
-          {footer}
-        </View>
-      ) : null}
+      {footer ? <View style={[column, { paddingBottom: chrome }]}>{footer}</View> : null}
     </View>
   );
 }

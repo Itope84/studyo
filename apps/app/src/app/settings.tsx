@@ -78,7 +78,7 @@ export default function Settings() {
   };
 
   return (
-    <Screen header={<Header title="Settings" />}>
+    <Screen header={<Header title="Settings" back={false} />}>
       <SectionTitle>Server</SectionTitle>
       <Row
         title={connection?.url ?? 'Not connected'}

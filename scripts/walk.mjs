@@ -10,9 +10,12 @@ page.on('console', (m) => {
   if (m.type() === 'error') logs.push(`console: ${m.text().slice(0, 300)}`);
 });
 page.on('pageerror', (e) => logs.push(`pageerror: ${e.message.slice(0, 300)}`));
-await page.goto(`${APP}/connect?server=http://localhost:8787&token=devtoken`, {
-  waitUntil: 'load',
-});
+await page.goto(
+  `${APP}/connect?server=${process.env.SERVER ?? 'http://localhost:8797'}&token=${process.env.TOKEN ?? 'demo'}`,
+  {
+    waitUntil: 'load',
+  },
+);
 await page.waitForTimeout(5000);
 for (const p of paths) {
   const [path, action] = p.split('|');
