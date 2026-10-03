@@ -207,23 +207,21 @@ export default function Player() {
                 backgroundColor: c.primary,
               }}
             />
-            {chapters
-              .slice(1)
-              .map((ch) =>
-                duration ? (
-                  <View
-                    key={ch.start}
-                    style={{
-                      position: 'absolute',
-                      left: `${(ch.start / duration) * 100}%`,
-                      top: 0,
-                      width: 2,
-                      height: 6,
-                      backgroundColor: c.surface,
-                    }}
-                  />
-                ) : null,
-              )}
+            {chapters.slice(1).map((ch) =>
+              duration ? (
+                <View
+                  key={ch.start}
+                  style={{
+                    position: 'absolute',
+                    left: `${(ch.start / duration) * 100}%`,
+                    top: 0,
+                    width: 2,
+                    height: 6,
+                    backgroundColor: c.surface,
+                  }}
+                />
+              ) : null,
+            )}
           </View>
           <View
             style={{
