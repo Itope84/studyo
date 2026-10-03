@@ -162,11 +162,14 @@ function TopicRow({ topic, job }: { topic: TopicSummary; job: Job | null }) {
       }
       meta={
         topic.progress.total ? (
-          <View style={{ width: 52, gap: 4, alignItems: 'flex-end' }}>
+          <View
+            style={{ width: 56, gap: 4, alignItems: 'flex-end' }}
+            accessibilityLabel={`${topic.progress.done} of ${topic.progress.total} done`}
+          >
             <T variant="meta" tone="lead">
-              {topic.progress.done}/{topic.progress.total}
+              {topic.progress.done} of {topic.progress.total}
             </T>
-            <View style={{ width: 52 }}>
+            <View style={{ width: 56 }}>
               <ProgressBar value={fraction} />
             </View>
           </View>
