@@ -1,0 +1,59 @@
+{
+  "steps": [
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] condense: starting"
+      }
+    },
+    {
+      "delay": 500,
+      "event": {
+        "type": "tool",
+        "name": "Read",
+        "summary": "Opening pack/pack.md"
+      }
+    },
+    {
+      "delay": 300,
+      "write": {
+        "path": "outputs/condensed-all-demo.md",
+        "content": "---\ntopic: demo\nkind: condensed\nbuilt: 2026-10-03\nscope: all\n---\n\n# The demo in plain words\n\nA short explanation. ([S1](https://example.com/article))\n"
+      }
+    },
+    {
+      "delay": 100,
+      "manifest": {
+        "addResources": [
+          {
+            "id": "condensed-all-demo",
+            "type": "condensed",
+            "title": "The demo in plain words",
+            "path": "outputs/condensed-all-demo.md",
+            "made_with": "replay",
+            "size": 120,
+            "added": "2026-10-03"
+          }
+        ]
+      }
+    },
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] condense: done. 1 sections, 0 items not covered by the pack."
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.02
+      }
+    }
+  ]
+}

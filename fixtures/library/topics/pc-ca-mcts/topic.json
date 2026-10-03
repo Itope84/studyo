@@ -1,7 +1,7 @@
 {
   "id": "pc-ca-mcts",
-  "title": "pc-ca-mcts",
-  "status": "enriching",
+  "title": "Building a post-quantum CA with Merkle Tree Certificates",
+  "status": "ready",
   "origin": {
     "type": "link",
     "link": "https://blog.cloudflare.com/pq-ca-with-mtcs/"

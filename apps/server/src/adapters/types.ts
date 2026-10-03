@@ -32,7 +32,13 @@ export type AdapterEvent =
   | { type: 'text-delta'; text: string }
   | { type: 'stderr'; text: string }
   /** The final outcome as the CLI reports it. */
-  | { type: 'result'; ok: boolean; text: string | null; error: string | null; costUsd: number | null };
+  | {
+      type: 'result';
+      ok: boolean;
+      text: string | null;
+      error: string | null;
+      costUsd: number | null;
+    };
 
 export interface RunOutcome {
   exitCode: number | null;
@@ -63,11 +69,13 @@ export function summariseTool(name: string, input: Record<string, unknown>): str
   if (n.includes('fetch')) return `Reading: ${short(str('url').replace(/^https?:\/\//, ''))}`;
   if (n === 'read') return `Opening ${file(str('file_path', 'filePath', 'path'))}`;
   if (n === 'write') return `Writing ${file(str('file_path', 'filePath', 'path'))}`;
-  if (n === 'edit' || n === 'multiedit') return `Editing ${file(str('file_path', 'filePath', 'path'))}`;
+  if (n === 'edit' || n === 'multiedit')
+    return `Editing ${file(str('file_path', 'filePath', 'path'))}`;
   if (n === 'grep' || n === 'glob' || n === 'list') return `Looking through files`;
   if (n === 'bash') return `Running: ${short(str('description') || str('command'), 70)}`;
   if (n === 'skill') return `Using skill ${str('skill', 'name', 'command')}`;
-  if (n === 'task' || n === 'agent') return `Delegating: ${short(str('description', 'prompt'), 70)}`;
+  if (n === 'task' || n === 'agent')
+    return `Delegating: ${short(str('description', 'prompt'), 70)}`;
   if (n.includes('todo')) return 'Updating its plan';
   return `Using ${name}`;
 }

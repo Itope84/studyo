@@ -1,0 +1,99 @@
+{
+  "steps": [
+    {
+      "delay": 300,
+      "event": {
+        "type": "text",
+        "text": "[studyo] level-check: 2 known, 3 gaps"
+      }
+    },
+    {
+      "delay": 600,
+      "event": {
+        "type": "tool",
+        "name": "WebSearch",
+        "summary": "Searching: hash function explainer"
+      }
+    },
+    {
+      "delay": 600,
+      "event": {
+        "type": "tool",
+        "name": "WebFetch",
+        "summary": "Reading: example.com/hash"
+      }
+    },
+    {
+      "delay": 400,
+      "event": {
+        "type": "text",
+        "text": "[studyo] sources: 2 opened"
+      }
+    },
+    {
+      "delay": 200,
+      "write": {
+        "path": "sources/S1-article.md",
+        "content": "# Example article\n\nThe original text.\n"
+      }
+    },
+    {
+      "delay": 200,
+      "write": {
+        "path": "pack/pack.md",
+        "content": "---\ntopic: demo\nkind: pack\nbuilt: 2026-10-03\ndepth: standard\n---\n\n# Demo study pack\n\nThis pack was written by the replay adapter, so tests and demos run without a real CLI. ([S1](https://example.com/article))\n\n## Before you start\n\n```callout kind=definition\nA hash function maps data of any size to a fixed-size value. ([S2](https://example.com/hash))\n```\n\n## The document\n\n<!-- studyo:original:start S1 -->\n## The original article\n\nThe original text would sit here, unchanged.\n<!-- studyo:original:end -->\n\n## Sources\n\n- S1: Example article\n- S2: Example explainer\n"
+      }
+    },
+    {
+      "delay": 200,
+      "manifest": {
+        "status": "ready",
+        "learning": {
+          "goal": "Understand the demo",
+          "gaps": [
+            "hash functions",
+            "merkle trees"
+          ],
+          "updated": "2026-10-03"
+        },
+        "addResources": [
+          {
+            "id": "pack",
+            "type": "pack",
+            "title": "Study pack",
+            "path": "pack/pack.md",
+            "made_with": "replay",
+            "size": 600,
+            "added": "2026-10-03"
+          },
+          {
+            "id": "S1",
+            "type": "source",
+            "title": "Example article",
+            "path": "sources/S1-article.md",
+            "made_with": null,
+            "size": 40,
+            "added": "2026-10-03"
+          }
+        ]
+      }
+    },
+    {
+      "delay": 300,
+      "event": {
+        "type": "text",
+        "text": "[studyo] enrich-document: done. 2 sources opened, 1 background section, 0 gaps."
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.05
+      }
+    }
+  ]
+}

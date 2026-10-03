@@ -1,0 +1,72 @@
+{
+  "steps": [
+    {
+      "delay": 300,
+      "event": {
+        "type": "tool",
+        "name": "Grep",
+        "summary": "Looking through files"
+      }
+    },
+    {
+      "delay": 200,
+      "event": {
+        "type": "text-delta",
+        "text": "Let me check the pack."
+      }
+    },
+    {
+      "delay": 300,
+      "event": {
+        "type": "tool",
+        "name": "Read",
+        "summary": "Opening pack/pack.md"
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text-delta",
+        "text": "Merkle Tree Certificates "
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text-delta",
+        "text": "replace a chain of signatures "
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text-delta",
+        "text": "with an inclusion proof in a log [S1]. "
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text-delta",
+        "text": "The pack does not say how revocation works.\n\n"
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text-delta",
+        "text": "[S1]: https://blog.cloudflare.com/pq-ca-with-mtcs/\n\n[studyo:suggest-enrich] How MTCs handle revocation"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "Merkle Tree Certificates replace a chain of signatures with an inclusion proof in a log [S1]. The pack does not say how revocation works.\n\n[S1]: https://blog.cloudflare.com/pq-ca-with-mtcs/\n\n[studyo:suggest-enrich] How MTCs handle revocation",
+        "error": null,
+        "costUsd": 0.01
+      }
+    }
+  ]
+}

@@ -2,9 +2,31 @@ import { randomUUID } from 'node:crypto';
 import { cliVersion, spawnJsonLines } from './spawn.ts';
 import { type AdapterEvent, type CliAdapter, type RunRequest, summariseTool } from './types.ts';
 
-const WORK_TOOLS = ['Read', 'Write', 'Edit', 'MultiEdit', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Bash', 'Skill', 'Task', 'TodoWrite'];
+const WORK_TOOLS = [
+  'Read',
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'Glob',
+  'Grep',
+  'WebSearch',
+  'WebFetch',
+  'Bash',
+  'Skill',
+  'Task',
+  'TodoWrite',
+];
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'Skill'];
-const READ_DENIED = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash', 'WebSearch', 'WebFetch', 'Task'];
+const READ_DENIED = [
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'NotebookEdit',
+  'Bash',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+];
 
 type Block = { type: string; text?: string; name?: string; input?: Record<string, unknown> };
 
@@ -53,7 +75,11 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
             const content = ((msg.message as { content?: Block[] })?.content ?? []) as Block[];
             for (const block of content) {
               if (block.type === 'tool_use' && block.name) {
-                onEvent({ type: 'tool', name: block.name, summary: summariseTool(block.name, block.input ?? {}) });
+                onEvent({
+                  type: 'tool',
+                  name: block.name,
+                  summary: summariseTool(block.name, block.input ?? {}),
+                });
               } else if (block.type === 'text' && block.text) {
                 onEvent({ type: 'text', text: block.text });
               }
@@ -61,7 +87,11 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
           } else if (type === 'stream_event') {
             if (msg.parent_tool_use_id) return;
             const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
-            if (ev?.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+            if (
+              ev?.type === 'content_block_delta' &&
+              ev.delta?.type === 'text_delta' &&
+              ev.delta.text
+            ) {
               onEvent({ type: 'text-delta', text: ev.delta.text });
             }
           } else if (type === 'result') {
@@ -70,7 +100,9 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
               type: 'result',
               ok,
               text: typeof msg.result === 'string' ? msg.result : null,
-              error: ok ? null : String(msg.result ?? msg.subtype ?? 'Claude Code reported an error'),
+              error: ok
+                ? null
+                : String(msg.result ?? msg.subtype ?? 'Claude Code reported an error'),
               costUsd: typeof msg.total_cost_usd === 'number' ? msg.total_cost_usd : null,
             });
           }

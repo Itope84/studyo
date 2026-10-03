@@ -1,5 +1,12 @@
 import { createHmac, randomBytes } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,7 +51,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const skillsDir = resolve(env.STUDYO_SKILLS ?? join(REPO_ROOT, 'skills'));
   linkSkills(library, skillsDir);
 
-  const origins = env.STUDYO_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean);
+  const origins = env.STUDYO_ORIGINS?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   return {
     library,

@@ -37,9 +37,23 @@ export function opencodeAdapter(bin = process.env.STUDYO_OPENCODE_BIN ?? 'openco
     async run(req: RunRequest, onEvent: (e: AdapterEvent) => void) {
       const permission =
         req.policy === 'work'
-          ? { edit: 'allow', bash: 'allow', webfetch: 'allow', websearch: 'allow', external_directory: 'deny' }
-          : { edit: 'deny', bash: 'deny', webfetch: 'deny', websearch: 'deny', external_directory: 'deny' };
-      const mcp = Object.fromEntries(mcpServerNames(req.cwd).map((name) => [name, { enabled: false }]));
+          ? {
+              edit: 'allow',
+              bash: 'allow',
+              webfetch: 'allow',
+              websearch: 'allow',
+              external_directory: 'deny',
+            }
+          : {
+              edit: 'deny',
+              bash: 'deny',
+              webfetch: 'deny',
+              websearch: 'deny',
+              external_directory: 'deny',
+            };
+      const mcp = Object.fromEntries(
+        mcpServerNames(req.cwd).map((name) => [name, { enabled: false }]),
+      );
       const config = { permission, mcp, instructions: [] as string[] };
 
       // OpenCode has no system-prompt flag; the framing goes in front of the message.
@@ -81,7 +95,11 @@ export function opencodeAdapter(bin = process.env.STUDYO_OPENCODE_BIN ?? 'openco
           switch (msg.type) {
             case 'tool_use':
               if (part.tool) {
-                onEvent({ type: 'tool', name: part.tool, summary: summariseTool(part.tool, part.state?.input ?? {}) });
+                onEvent({
+                  type: 'tool',
+                  name: part.tool,
+                  summary: summariseTool(part.tool, part.state?.input ?? {}),
+                });
                 lastText = [];
               }
               break;
@@ -93,9 +111,14 @@ export function opencodeAdapter(bin = process.env.STUDYO_OPENCODE_BIN ?? 'openco
               }
               break;
             case 'error': {
-              const err = msg.error as { message?: string; data?: { message?: string } } | string | undefined;
+              const err = msg.error as
+                | { message?: string; data?: { message?: string } }
+                | string
+                | undefined;
               sawError =
-                typeof err === 'string' ? err : (err?.data?.message ?? err?.message ?? 'OpenCode reported an error');
+                typeof err === 'string'
+                  ? err
+                  : (err?.data?.message ?? err?.message ?? 'OpenCode reported an error');
               onEvent({ type: 'stderr', text: sawError });
               break;
             }

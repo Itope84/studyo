@@ -7,7 +7,7 @@ export function inboxKind(name: string): InboxItem['kind'] {
   const ext = extname(name).toLowerCase();
   if (ext === '.pdf') return 'pdf';
   const media = mediaTypeFor(name);
-  if (media) return media;
+  if (media === 'audio' || media === 'video') return media;
   if (['.md', '.txt', '.html', '.htm', '.epub', '.docx'].includes(ext)) return 'document';
   return 'other';
 }

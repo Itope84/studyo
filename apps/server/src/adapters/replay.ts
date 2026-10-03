@@ -28,11 +28,20 @@ export function replayAdapter(dir: string, id: CliId = 'claude'): CliAdapter {
     detect: async () => ({ installed: true, version: 'replay' }),
     async run(req: RunRequest, onEvent: (e: AdapterEvent) => void) {
       const meta = req.meta ?? { kind: 'unknown', phase: 'start', topicPath: req.cwd };
-      const file = [join(dir, `${meta.kind}.${meta.phase}.json`), join(dir, `${meta.kind}.json`)].find(existsSync);
+      const file = [
+        join(dir, `${meta.kind}.${meta.phase}.json`),
+        join(dir, `${meta.kind}.json`),
+      ].find(existsSync);
       const sessionId = req.resume && !req.fork ? req.resume : `replay-${randomUUID()}`;
       onEvent({ type: 'session', sessionId });
       if (!file) {
-        onEvent({ type: 'result', ok: false, text: null, error: `No replay script for ${meta.kind}`, costUsd: null });
+        onEvent({
+          type: 'result',
+          ok: false,
+          text: null,
+          error: `No replay script for ${meta.kind}`,
+          costUsd: null,
+        });
         return { exitCode: 1, sessionId, cancelled: false };
       }
       const script = JSON.parse(readFileSync(file, 'utf8')) as ReplayScript;

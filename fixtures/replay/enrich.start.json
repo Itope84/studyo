@@ -1,0 +1,65 @@
+{
+  "steps": [
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] enrich-document: starting"
+      }
+    },
+    {
+      "delay": 600,
+      "event": {
+        "type": "tool",
+        "name": "WebFetch",
+        "summary": "Reading: example.com/article"
+      }
+    },
+    {
+      "delay": 400,
+      "event": {
+        "type": "text",
+        "text": "[studyo] capture: saved the original as S1"
+      }
+    },
+    {
+      "delay": 400,
+      "event": {
+        "type": "tool",
+        "name": "Read",
+        "summary": "Opening sources/S1-article.md"
+      }
+    },
+    {
+      "delay": 500,
+      "event": {
+        "type": "text",
+        "text": "[studyo] notes: 9 key terms"
+      }
+    },
+    {
+      "delay": 300,
+      "write": {
+        "path": "_job/questions.json",
+        "content": "{\n  \"id\": \"level-1\",\n  \"title\": \"Before I build your pack\",\n  \"intro\": \"One quick question so the pack starts at the right level.\",\n  \"questions\": [\n    {\n      \"id\": \"known\",\n      \"kind\": \"multi\",\n      \"label\": \"Which of these do you already understand? I've ticked the ones your profile suggests.\",\n      \"options\": [\n        {\n          \"id\": \"hash-functions\",\n          \"label\": \"Hash functions\",\n          \"group\": \"Concepts the material uses\"\n        },\n        {\n          \"id\": \"merkle-trees\",\n          \"label\": \"Merkle trees\",\n          \"group\": \"Concepts the material uses\"\n        },\n        {\n          \"id\": \"digital-signatures\",\n          \"label\": \"Digital signatures\",\n          \"group\": \"What they build on\"\n        },\n        {\n          \"id\": \"tls\",\n          \"label\": \"TLS\",\n          \"group\": \"What they build on\",\n          \"checked\": true,\n          \"note\": \"In your profile\"\n        }\n      ]\n    },\n    {\n      \"id\": \"goal\",\n      \"kind\": \"text\",\n      \"label\": \"What do you want to be able to do or understand when you're done?\",\n      \"placeholder\": \"One line\"\n    }\n  ]\n}"
+      }
+    },
+    {
+      "delay": 100,
+      "event": {
+        "type": "text",
+        "text": "[studyo] NEEDS_INPUT"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "[studyo] NEEDS_INPUT",
+        "error": null,
+        "costUsd": 0.01
+      }
+    }
+  ]
+}

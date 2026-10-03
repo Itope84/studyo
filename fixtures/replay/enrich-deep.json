@@ -1,0 +1,37 @@
+{
+  "steps": [
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] enrich-topic: starting"
+      }
+    },
+    {
+      "delay": 300,
+      "event": {
+        "type": "tool",
+        "name": "WebSearch",
+        "summary": "Searching: something"
+      }
+    },
+    {
+      "delay": 200,
+      "event": {
+        "type": "stderr",
+        "text": "API Error: overloaded"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": false,
+        "text": null,
+        "error": "API Error: overloaded",
+        "costUsd": null
+      }
+    }
+  ],
+  "exitCode": 1
+}

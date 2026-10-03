@@ -21,7 +21,9 @@ export function readProfile(library: string): Profile {
 }
 
 export function writeProfile(library: string, profile: Profile) {
-  const knows = profile.knows.map((k) => Object.fromEntries(Object.entries(k).filter(([, v]) => v != null)));
+  const knows = profile.knows.map((k) =>
+    Object.fromEntries(Object.entries(k).filter(([, v]) => v != null)),
+  );
   const front = stringify({ knows }).trimEnd();
   writeFileSync(profilePath(library), `---\n${front}\n---\n\n${profile.notes.trim()}\n`);
 }
@@ -29,7 +31,9 @@ export function writeProfile(library: string, profile: Profile) {
 /** Record that the person read a topic: its gap concepts become known with `via: read`. */
 export function markRead(library: string, topicId: string, terms: string[]): Profile {
   const profile = readProfile(library);
-  const known = new Set(profile.knows.filter((k) => k.via !== 'forgot').map((k) => k.term.toLowerCase()));
+  const known = new Set(
+    profile.knows.filter((k) => k.via !== 'forgot').map((k) => k.term.toLowerCase()),
+  );
   for (const raw of terms) {
     // Gaps may carry a note in brackets: "hash functions (basis for Merkle trees)".
     const term = raw.replace(/\s*\(.*\)\s*$/, '').trim();

@@ -15,7 +15,16 @@ import { parseFile } from 'music-metadata';
 import { HttpError, notFound, nowIso, readJson, slugify, today, writeJsonAtomic } from './util.ts';
 
 const TOPIC_ID = /^[a-z0-9][a-z0-9-]*$/;
-export const AUDIO_EXT = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.opus', '.flac']);
+export const AUDIO_EXT = new Set([
+  '.mp3',
+  '.m4a',
+  '.aac',
+  '.wav',
+  '.ogg',
+  '.oga',
+  '.opus',
+  '.flac',
+]);
 export const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm', '.mkv']);
 const SOURCE_EXT = new Set(['.md', '.pdf', '.txt', '.html', '.htm']);
 
@@ -57,7 +66,11 @@ export class Library {
     const entries = await readdir(this.topicsDir, { withFileTypes: true }).catch(() => []);
     const ids: string[] = [];
     for (const e of entries) {
-      if (e.isDirectory() && TOPIC_ID.test(e.name) && existsSync(join(this.topicsDir, e.name, 'topic.json'))) {
+      if (
+        e.isDirectory() &&
+        TOPIC_ID.test(e.name) &&
+        existsSync(join(this.topicsDir, e.name, 'topic.json'))
+      ) {
         ids.push(e.name);
       }
     }
@@ -127,9 +140,11 @@ export class Library {
     slugHint: string;
   }): Promise<Manifest> {
     let id = slugify(input.slugHint);
-    for (let n = 2; existsSync(join(this.topicsDir, id)); n++) id = `${slugify(input.slugHint, 44)}-${n}`;
+    for (let n = 2; existsSync(join(this.topicsDir, id)); n++)
+      id = `${slugify(input.slugHint, 44)}-${n}`;
     const dir = this.topicDir(id);
-    for (const sub of ['sources', 'pack', 'outputs', 'chat']) mkdirSync(join(dir, sub), { recursive: true });
+    for (const sub of ['sources', 'pack', 'outputs', 'chat'])
+      mkdirSync(join(dir, sub), { recursive: true });
     const now = nowIso();
     const manifest: Manifest = {
       id,
@@ -272,13 +287,17 @@ async function discover(dir: string, manifest: Manifest): Promise<Resource[]> {
       .map((e) => e.name)
       .sort();
 
-  if (existsSync(join(dir, 'pack', 'pack.md'))) await add('pack/pack.md', 'pack', 'Study pack', 'pack');
+  if (existsSync(join(dir, 'pack', 'pack.md')))
+    await add('pack/pack.md', 'pack', 'Study pack', 'pack');
 
   for (const name of await list('sources')) {
     const ext = extname(name).toLowerCase();
     if (!SOURCE_EXT.has(ext) || name === 'ledger.jsonl') continue;
     // A rendering next to its Markdown is not a separate source.
-    if ((ext === '.html' || ext === '.htm') && existsSync(join(dir, 'sources', name.replace(/\.html?$/, '.md'))))
+    if (
+      (ext === '.html' || ext === '.htm') &&
+      existsSync(join(dir, 'sources', name.replace(/\.html?$/, '.md')))
+    )
       continue;
     const sid = /^(S\d+)-/.exec(name)?.[1] ?? slugify(basename(name, ext));
     await add(`sources/${name}`, 'source', titleFromFilename(name), sid);
@@ -287,8 +306,15 @@ async function discover(dir: string, manifest: Manifest): Promise<Resource[]> {
   for (const name of await list('outputs')) {
     const ext = extname(name).toLowerCase();
     const media = mediaTypeFor(name);
-    if (media) await add(`outputs/${name}`, media, titleFromFilename(name), slugify(basename(name, ext)));
-    else if (ext === '.md') await add(`outputs/${name}`, 'condensed', titleFromFilename(name), slugify(basename(name, ext)));
+    if (media)
+      await add(`outputs/${name}`, media, titleFromFilename(name), slugify(basename(name, ext)));
+    else if (ext === '.md')
+      await add(
+        `outputs/${name}`,
+        'condensed',
+        titleFromFilename(name),
+        slugify(basename(name, ext)),
+      );
   }
   return found;
 }

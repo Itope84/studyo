@@ -39,14 +39,21 @@ export class EventBus {
 
   /** Events after `afterId`, or `null` when the log no longer reaches back that far. */
   replay(afterId: number): StoredEvent[] | null {
-    const oldest = this.db.prepare('SELECT MIN(id) AS id FROM events').get() as { id: number | null };
+    const oldest = this.db.prepare('SELECT MIN(id) AS id FROM events').get() as {
+      id: number | null;
+    };
     const latest = this.latestId();
     if (afterId > latest) return null; // id from a different server or a wiped log
     if (oldest.id !== null && afterId < Number(oldest.id) - 1) return null;
     const rows = this.db
       .prepare('SELECT id, type, at, data FROM events WHERE id > ? ORDER BY id')
       .all(afterId) as { id: number; type: EventType; at: string; data: string }[];
-    return rows.map((r) => ({ id: Number(r.id), type: r.type, at: r.at, data: JSON.parse(r.data) }));
+    return rows.map((r) => ({
+      id: Number(r.id),
+      type: r.type,
+      at: r.at,
+      data: JSON.parse(r.data),
+    }));
   }
 
   latestId(): number {
@@ -58,9 +65,7 @@ export class EventBus {
     this.sinceTrim = 0;
     const cutoff = new Date(Date.now() - KEEP_MS).toISOString();
     this.db
-      .prepare(
-        'DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - ? AND at < ?',
-      )
+      .prepare('DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - ? AND at < ?')
       .run(KEEP_EVENTS, cutoff);
   }
 }
