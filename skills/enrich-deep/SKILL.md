@@ -6,7 +6,7 @@ description: Deep-research escalation for a Studyo topic that already has a pack
 # Enrich deep
 
 Read first, in this order:
-`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/source-ledger.md`, `../_shared/source-discovery.md`, `../_shared/limits.md` (column `enrich-deep`), `../_shared/render-contract.md`.
+`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/source-ledger.md`, `../_shared/source-discovery.md`, `../_shared/run-log.md`, `../_shared/limits.md` (column `enrich-deep`), `../_shared/render-contract.md`.
 
 Run only when asked. Needs `pack/pack.md` already built by `enrich-document` or `enrich-topic`. If there is none, set the topic `failed` with "no pack to deepen" and stop.
 
@@ -34,7 +34,7 @@ Keep to questions that matter for understanding or for a load-bearing claim. Ran
 Work through the questions following `source-discovery.md`. Differences from the standard skills:
 - For every load-bearing claim, search for an independent source (not another copy of the same original) and also for sources that disagree.
 - Aim for a mix of source types. Report the mix.
-- Log every source in the ledger immediately, including ones you reject and why.
+- Log every source in the ledger immediately, including ones you reject and why, with `found_via` and `from`.
 - **Subagents (optional).** If the CLI supports them, run up to 3 in parallel, each given one group of questions and told to write notes to `sources/_work/task-<n>.md` with sources and exact quotes with locators. Notes are routing aids, not proof: you must open the original source yourself for every claim, figure, date or quote you use. Without subagents, work sequentially.
 - Record each claim you plan to use in `sources/claims.jsonl`: `id`, `section`, `claim` (one sentence), `sources` (ids), `locator`, `quote`, `support` (`supported`, `contradicted`, `unknown`).
 
@@ -53,7 +53,7 @@ For each Check note and each high-impact claim, ask once: could this be wrong, d
 Run the final checks in `grounding-and-citations.md`, with the deep column: every direct quote **and** every figure and date, matched against the saved source files. Confirm no rejected source is cited.
 
 ### 7. Finish
-Render if the renderer is available. Update `topic.json` (new sources, `updated`, `status: ready`). Print:
+Render if the renderer is available. Update `topic.json` (new sources, `updated`, `status: ready`). Append the run line per `run-log.md`. Print:
 `[studyo] enrich-deep: done. <n> sources opened, <m> claims checked, <c> contradicted, <k> gaps remain.`
 
 ## Do not

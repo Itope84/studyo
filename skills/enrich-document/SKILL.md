@@ -6,7 +6,7 @@ description: Turn a link or PDF in a Studyo topic folder into a source-grounded 
 # Enrich a document
 
 Read first, in this order:
-`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/source-ledger.md`, `../_shared/source-discovery.md`, `../_shared/limits.md` (column `enrich-document`), `../_shared/render-contract.md`.
+`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/source-ledger.md`, `../_shared/source-discovery.md`, `../_shared/run-log.md`, `../_shared/limits.md` (column `enrich-document`), `../_shared/render-contract.md`.
 
 Output: `pack/pack.md` (and `pack.html` when the renderer exists), `sources/ledger.jsonl` and saved sources, an updated `topic.json`.
 
@@ -38,7 +38,7 @@ Take the `gaps` that `level-check` wrote to `topic.json`. For each, ask: could t
 Add background only for concepts `level-check` covered. Do not discover new layers of prerequisites while sourcing and chase them.
 
 ### 6. Find sources
-For each planned concept, find a source following `source-discovery.md`. Start with the original's own references. For the learner's basics, favour a clear, reliable source that explains the idea well. A good explainer of a basic idea is exactly what is needed here, as long as it is reliable and you cite it. Open each source, save it, and write the ledger entry immediately. Stay under the ceilings in `limits.md`. If a concept has no usable source after two angles, move it to Gaps.
+For each planned concept, find a source following `source-discovery.md`. Start with the original's own references. For the learner's basics, favour a clear, reliable source that explains the idea well. A good explainer of a basic idea is exactly what is needed here, as long as it is reliable and you cite it. Open each source, save it, and write the ledger entry immediately, including `found_via` and `from`. Stay under the ceilings in `limits.md`. If a concept has no usable source after two angles, move it to Gaps.
 
 ### 7. Assemble `pack/pack.md`
 Use this order:
@@ -56,7 +56,7 @@ Each background section is a clear heading naming the concept, then as many shor
 Run the final checks in `grounding-and-citations.md`. For quote checks, search the saved source files. Fix failures. Anything you cannot fix goes in Gaps.
 
 ### 9. Finish
-Render if the renderer is available. Update `topic.json` per `topic-folder.md` (add the pack and sources as resources, `status: ready`). Delete nothing in `sources/_work/`. Print:
+Render if the renderer is available. Update `topic.json` per `topic-folder.md` (add the pack and sources as resources, `status: ready`). Delete nothing in `sources/_work/`. Append the run line per `run-log.md`. Print:
 `[studyo] enrich-document: done. <n> sources opened, <m> background sections, <k> gaps.`
 
 ## Do not

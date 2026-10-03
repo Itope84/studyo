@@ -13,7 +13,12 @@
 | `published` | Publication or last-updated date if shown, else `null`. |
 | `saved` | Path under `sources/` where the extracted text or file is stored, else `null`. |
 | `used_for` | Why it was fetched: the gap or concept it answers. |
+| `found_via` | How you found it: `article-link` (linked in a page you retrieved), `search`, `citation-chase` (cited by a source you read), `provided` (the user gave it), or `memory` (a last resort, see `source-discovery.md`). |
+| `from` | What led to it: the search query, or the ledger id of the page that linked or cited it. Empty for `provided`. |
+| `fetched_with` | Only when you used shell `curl` instead of the CLI's fetch tool: `curl`. Leave out otherwise. |
 | `note` | Reason for `rejected` / `unavailable` / `partial`, and anything a reader should know. |
+
+Log failures too. A source that could not be retrieved is `unavailable`, and one you opened and did not use is `rejected`, each with a reason. An empty failure record makes it impossible to tell whether nothing failed or nothing was logged.
 
 ## Source types
 

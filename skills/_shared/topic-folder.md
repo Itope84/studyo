@@ -6,6 +6,7 @@ The contract between skills, server and app. Skills work inside **one topic fold
 <topic>/
   topic.json
   progress.json            do not touch: the app writes it
+  runs.jsonl               one line per enrich run, see run-log.md
   sources/
     ledger.jsonl           see source-ledger.md
     S1-<slug>.md|.pdf      originals and saved sources, with S<n>-assets/

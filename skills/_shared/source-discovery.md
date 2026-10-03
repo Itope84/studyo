@@ -15,10 +15,15 @@ This file deliberately names no sites or venues. Where to look depends on the fi
 7. **Dead or blocked links.** Try an archived copy once. If that fails, log the source as `unavailable` and move on.
 8. **Open before citing.** Fetch and read the source. Snippets are leads only.
 9. **Check independence.** Two pages repeating the same original count as one source, so cite the original.
+10. **Search before recalling.** Prefer URLs that came from a page you retrieved or a search result. If a source you need is not linked anywhere you have read, search for it. If search does not find what you need, you may try a URL you recall from memory as a last resort. Fetch it, and cite it only if the fetch succeeds and you read the content. Log it with `found_via: memory`. Never cite a URL you could not open.
+
+## Fetching
+
+Use the CLI's own fetch tool. If it fails or is unavailable, shell `curl` is allowed as a fallback. Log `fetched_with: curl` in the ledger entry. If a site only serves its content to a browser-like client, note that in the entry's `note`.
 
 ## Fit to the learner
 
-Use `profile.json` (see `level-check`). The level changes which sources you choose, not whether they are sourced:
+Use `library/profile.md` and the topic's `learning.gaps` (see `level-check`). The level changes which sources you choose, not whether they are sourced:
 
 - Newer to the topic: for each concept the learner is missing, look for the most accessible source that is still reliable, such as an official primer, introduction or documentation. Pick it for clarity and still cite it.
 - Working knowledge or above: prefer the originating or most authoritative material. Skip basics the profile marks as known.
