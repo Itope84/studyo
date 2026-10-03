@@ -2,7 +2,7 @@
 
 Personal learning pipeline. A home server (this Mac) turns a link, PDF or topic name into a source-grounded study pack by running Claude Code or OpenCode with the skills in `skills/`. One app (Expo: web now, Android later) reads, listens, chats, and downloads packs as PDF for NotebookLM.
 
-Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. `README.md` covers running, deploying and Cloudflare Access.
+Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. Courses, quizzes and take-home have their own brief, `docs/courses-brief.md`. Chat (slice 8) still needs a rework. `README.md` covers running, deploying and Cloudflare Access.
 
 ## Layout
 
@@ -11,7 +11,7 @@ packages/api/        openapi.yaml (THE contract), generated types (src/schema.ge
 packages/renderer/   Markdown + directives → themed HTML (callouts, mermaid, KaTeX, free-form svg/html, print CSS). No AI.
 apps/server/         Hono API, library scanner, job runner, CLI adapters (claude, opencode, replay), SSE, PDF (playwright-core), web push
 apps/app/            Expo Router app (SDK 57). Screens in src/app, shared UI in src/components, data in src/lib
-skills/              skills the CLIs run; linked into <library>/.claude/skills by the server
+skills/              skills the CLIs run; linked into <library>/.claude/skills by the server (course-outline, course-plan, enrich-chapter, quiz, quiz-grade, assignment, assignment-review are the course-era ones)
 library/             the user's real library (gitignored). Server state in library/_studyo/
 fixtures/            committed test library, replay scripts (fake AI jobs), one audio file
 e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e server, fake Cloudflare Access, screenshots)
@@ -24,6 +24,7 @@ e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e s
 - **All AI work is a job** (SQLite in `_studyo/`): queued → running → needs_input → succeeded/failed/cancelled. Work lane (one at a time) and chat lane. A skill that needs the learner writes `_job/questions.json`, prints `[studyo] NEEDS_INPUT` and ends its turn; answers resume the same CLI session. Skills print `[studyo] n/N phase: …` for progress.
 - **Live state:** one SSE stream (`/events`) announces changes; the app always refetches on resume, so nothing depends on the stream staying open (iOS suspends web apps).
 - **Skills write Markdown; the renderer makes HTML.** Never have the AI write HTML. PDFs are printed from that HTML by headless Chromium.
+- **Courses.** `courses/<id>/course.json` plus `index.md`, `sources/`, `chat/`, `quizzes/`. Chapters are ordinary topic folders in `topics/` with a `course` field, made by the server from `course.json` after the outline job. Course-level jobs, chat and quizzes use the scope id `course--<id>` where a topic id goes (`isCourseScope` in `@studyo/api`). Quizzes live in `<topic or course>/quizzes/`, take-home work in `<topic>/assignments/`; the skills write the JSON and the server (`study.ts`) reads and merges it. See `docs/courses-brief.md`.
 - **Both CLIs, always.** Anything CLI-related goes through the adapter interface. Unattended runs switch off MCP servers.
 - **Files without headers:** media and the Reader load from `/f/<file token>/…` (token derived from the access token).
 - **Cloudflare Access:** app on another hostname signs in via `GET /auth/access` hand-off and sends `cf-access-token`. Same-hostname setups use the web port, which also serves the API under `/api`.

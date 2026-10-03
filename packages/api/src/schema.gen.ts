@@ -481,7 +481,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run the outline job again (after a failure, or to start over) */
+        /**
+         * Run the outline job again after a failure or a cancel
+         * @description Refused with 409 once an outline has been approved, because chapters may already be built.
+         */
         post: operations["redoCourseOutline"];
         delete?: never;
         options?: never;
@@ -918,7 +921,7 @@ export interface components {
             /** @description Derived by the server. The first figure in the pack (or a condensed doc), relative to the topic folder, for cover art. */
             cover_path?: string | null;
             learning?: components["schemas"]["Learning"] | null;
-            /** @description Set when this topic is a chapter (or the Prelim) of a course. Chapters stay out of Home's topic list. */
+            /** @description Set when this topic is a chapter (or the Prelim) of a course. The topic list includes chapters, marked with `course_id`; Home shows them under their course instead. */
             course?: components["schemas"]["ChapterRef"] | null;
             failure_reason?: string | null;
             /** @description One sentence on what the topic is. Written by the enrich skills; falls back to the pack's description. */

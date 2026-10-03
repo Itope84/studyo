@@ -54,3 +54,5 @@ While the stream is down and a job is active, the app polls `GET /jobs?active=tr
 ## Chat replies
 
 `POST /topics/{id}/chat` creates both messages immediately. The reply is saved to `<topic>/chat/` as it streams. After a reconnect, `GET /topics/{id}/chat` returns everything so far, and later `chat.delta` events continue it.
+
+`topic_id` in these events may be a course scope id (`course--<id>`) for course-level jobs, chat and changes; refetch the course, and the course list, when you see one. A change to a chapter is an ordinary `topic.updated` for the chapter's topic id.

@@ -151,18 +151,28 @@ Direction: not "pack only". Explain, don't quote. Order: pack and sources first,
 - [ ] Scopes: topic, chapter (falls back to earlier chapters), course (routes via `index.md`)
 - [ ] Verify with both CLIs and the replay adapter
 
-### 9. Courses (brief: `docs/courses-brief.md`; open concerns there come first)
-- [ ] Answer open concerns, then Stitch screens
-- [ ] Contract: Course schema, chapter fields, endpoints, job kinds; update `topic-folder.md`
-- [ ] Skills: `course-outline`, `course-plan`, course params for `enrich-document`, `enrich-topic`, `level-check`, `condense`
-- [ ] Server: course scanner, outline job with `needs_input` approval, lazy chapter builds, "build next N"
-- [ ] App: Courses on Home, add course, outline review, course home, chapter banner
-- [ ] Prelim chapter from course-level gaps
-- [ ] Course chat (with chat rework above)
+### 9. Courses (brief: `docs/courses-brief.md`)
+Built Oct 3, 2026 in one pass, tested in replay only. Real CLI runs are the open item.
+- [x] Answer open concerns. Stitch skipped (the screens are variants of existing ones; checked with screenshots instead)
+- [x] Contract: Course, ChapterRef, endpoints (`/courses…`), job kinds, `course_id` on topic summaries; `topic-folder.md`, new `course-folder.md`
+- [x] Skills: `course-outline`, `course-plan`, `enrich-chapter`; course modes in `level-check`; course notes in `condense` and `answer`
+- [x] Server: courses store, outline job with `needs_input` approval, server makes chapter topic folders from `course.json`, lazy chapter builds (`build` with ids or next N), chapter done mark feeds the profile, scanned PDFs refused up front with `pdftotext`
+- [x] App: Courses on Home, add course, outline approval (reuses the question screen), course home, chapter banner with prerequisites and done mark
+- [x] Prelim chapter from the course-level gaps
+- [x] Course chat (scope id `course--<id>`; uses the current `answer` skill, so it inherits slice 8's problems)
+- [x] Server tests (`apps/server/test/courses.test.ts`) and an e2e flow
+- [ ] Real runs: `course-outline` on a real PDF (DDIA is the target), `course-plan` on a bare subject, `enrich-chapter` on a slice, with both CLIs. None of the new skills has run on a real CLI yet.
+- [ ] Check `pdftotext` page ranges and the printed-page offset on a real book
+- [ ] Course-level PDF export for NotebookLM (per chapter works today, a whole-course bundle does not exist)
+- [ ] Wide layouts for the course page (shares slice 7's open item)
 
 ### 10. Quizzes and take-home (topics, chapters, courses; user triggered)
-- [ ] `quiz` skill and job kinds; quiz runner, results, attempts in `progress.json`
-- [ ] `assignment` skill: optional context input (own project, work situation, or none for a generic task), brief, submission (file, link, text), review. No code execution in v1.
+Built Oct 3, 2026, replay only.
+- [x] `quiz` and `quiz-grade` skills; quiz and attempt storage; choice questions graded on the server, written ones by a chat-lane job; quiz runner and results screens; course quizzes draw on built chapters
+- [x] `assignment` and `assignment-review` skills: optional context (text, link, file) or none; free-text, link or file submissions; review reads and never runs code
+- [ ] Real runs of all four skills
+- [ ] Spaced review from quiz history (data shape allows it; not built)
+- [ ] Weak concepts from a quiz could offer a one-tap "ask about this" (only "Reread this" exists)
 
 ## Not in this plan
 Android offline downloads and background audio (brief step 4), the share menu, Android Auto. These follow once the web app works end to end.

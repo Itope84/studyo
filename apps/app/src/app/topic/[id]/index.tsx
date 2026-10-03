@@ -163,13 +163,13 @@ export default function TopicScreen() {
       }
     >
       <View style={{ paddingTop: space.lg, gap: space.sm }}>
-        <TopicBadge status={topic.status} job={activeJob} />
+        {topic.course ? null : <TopicBadge status={topic.status} job={activeJob} />}
         <T variant="display" accessibilityRole="header">
           {topic.title}
         </T>
-        {topic.summary ? (
+        {topic.summary || topic.course?.summary ? (
           <T variant="body" tone="lead">
-            {topic.summary}
+            {topic.summary ?? topic.course?.summary}
           </T>
         ) : null}
         {topic.course ? null : <OriginLine topic={topic} />}

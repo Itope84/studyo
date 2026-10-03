@@ -146,7 +146,7 @@ export default function Add() {
                 course ? 'For example: Distributed systems' : 'For example: Raft consensus'
               }
               autoFocus
-              accessibilityLabel="Topic"
+              accessibilityLabel={course ? 'Subject' : 'Topic'}
             />
           </Field>
         ) : null}

@@ -655,7 +655,8 @@ paths:
       - $ref: '#/components/parameters/CourseId'
     post:
       tags: [courses]
-      summary: Run the outline job again (after a failure, or to start over)
+      summary: Run the outline job again after a failure or a cancel
+      description: Refused with 409 once an outline has been approved, because chapters may already be built.
       operationId: redoCourseOutline
       responses:
         '202':

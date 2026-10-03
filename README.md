@@ -13,6 +13,12 @@ pnpm start          # builds the web app, then serves the API on :8787 and the a
 
 The server prints an access token and a **setup link**. Open the link on this Mac or on your phone (same Wi-Fi or Tailscale) and the app connects straight away. Your library is `library/` in this repo. The token is kept in `library/_studyo/token`.
 
+### Courses, quizzes and take-home
+
+**Add course** (next to Add topic) takes a book as a PDF, a link, or just a subject. The server finds the chapters without reading the whole thing (it needs `pdftotext`, from `brew install poppler`; scanned PDFs are refused), shows you an outline to approve, asks what you already know, and sets up a Prelim if there are gaps. Nothing is built until you start a chapter or tap "Build next". Each chapter is a normal topic with a banner showing where it sits and what it builds on; prerequisites advise and never lock.
+
+Every pack has **Quiz me** and **Take-home** buttons, and a course has its own cumulative quiz and a course-wide chat. Both are only made when you ask. A take-home can be about your own project: give it some context, or leave that empty for a generic task. You can hand in a link, a file or just a description of what you built.
+
 ### Downloading for NotebookLM
 
 Every pack and condensed doc has a download button (in the topic's list and in the Reader's toolbar). **PDF** is printed on the server with diagrams, maths and a list of source links at the end. The first download takes a few seconds; after that it's cached until the document changes. **Markdown** is the source file as the skills wrote it. NotebookLM takes either.

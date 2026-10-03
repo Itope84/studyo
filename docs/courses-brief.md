@@ -10,6 +10,8 @@ The learner adds a course, approves an outline, then studies chapter by chapter.
 
 ## 2. The model
 
+**As built:** chapters live in `topics/` like any topic (so every existing path, job and chat works unchanged) and carry a `course` field. The course folder `courses/<id>/` holds `course.json`, `index.md`, `sources/`, `chat/` and `quizzes/`. The tree below shows the first design; the only change is that `chapters/` is `topics/` at the library root.
+
 **A chapter is a topic folder with extra manifest fields.** This is the main decision: it reuses the scanner, Reader, player, jobs, progress, PDF export and chat plumbing.
 
 ```
@@ -97,10 +99,35 @@ Home with a Courses section; Add course (source or name, goal); Outline review (
 1. Topic and Course stay separate entities. "Promote topic to course" comes later.
 2. Show a cost estimate before building; "build next N". Chapters build lazily.
 3. Outline approval is approve plus a free-text instruction. No editor in v1.
-4. Scanned PDFs (no text layer, so no table of contents): **pending**. Recommended: ask the learner for chapter start pages; OCR later.
+4. Scanned PDFs (no text layer, so no table of contents): not supported. The server checks the first pages with `pdftotext` when a PDF is added and the course fails at once with "This PDF is scanned", costing no tokens. If `pdftotext` is missing the check is skipped and the skill makes the same call.
 5. One source ledger at course level; chapters cite the same `S<n>`.
 6. NotebookLM PDFs are per chapter.
 7. Quiz attempts are kept, per concept, so spaced review can use them later.
 8. Take-home submissions: file, public GitHub link, or free text. Free text can be as simple as "I did it, here is what I built". Private repos need a configured token, out of v1.
 9. Chapter packs quote the learner's own book and stay private. Sharing is manual.
 10. Course goal is free text, like topics.
+
+## 9. Assumptions made while building (Oct 3, 2026)
+
+Judgement calls made without asking, so they can be reversed:
+1. **Chapters are stored in `topics/`,** not in `courses/<id>/chapters/`. Reuses everything; the course folder stays small. Chapters are marked by `course_id` and the topic list includes them (Home filters them out).
+2. **Course-level jobs and chat use a scope id** `course--<id>` in the `topic_id` fields, so the job runner, chat store, event stream and file watcher work unchanged. Topic ids never start with `course--`.
+3. **One outline job does everything up to the Prelim:** structure, approval question, what-you-know question, Prelim. The server only makes the chapter folders afterwards.
+4. **Outline approval is capped at three rounds** of "change it", then the latest draft counts as approved. Unattended runs approve the first draft.
+5. **The Prelim is an advisory chapter,** shown first on the course page. Other chapters do not list it as a prerequisite edge.
+6. **Chapter "done" means its pack is marked read.** Marking a chapter done adds its `teaches` to `profile.md` (`via: read`). Marking not done does not remove them (the profile is never trimmed by the app).
+7. **A chapter's level question is inferred:** concepts taught by finished prerequisite chapters count as known, and most chapters ask nothing.
+8. **"Build next N" offers 1 and 3.** The API accepts 1 to 20.
+9. **Quiz questions never reach the app with answers.** The server keeps the answer side and returns it per question in the graded attempt. Quizzes can be retaken; every attempt is kept.
+10. **Free-text quiz grading runs in the chat lane** so it does not wait behind chapter builds.
+11. **Take-home is topic and chapter only,** not course level. A topic needs a pack first. The context link must be http(s); private repositories simply cannot be read.
+12. **A take-home has no due date, no revisions of the brief, and no limit on submissions.** Each submission gets its own review.
+13. **Notifications** (Web Push) fire for outline questions, finished outlines, briefs, quizzes and reviews, like other jobs. Grading and chat replies stay silent.
+14. **Course chat reuses the current `answer` skill** with a short course section, so it is as strict as topic chat until slice 8 lands.
+15. **No Stitch.** Screens were built in code from the existing components and checked with screenshots.
+16. **The course quiz is available once one chapter is built,** not only once chapters are done.
+17. **A course cannot be re-outlined once approved** (409), because chapters may already be built. Archive it and add a new one.
+
+## 10. Blocking questions
+
+None blocked the build. Things worth deciding when you are back are in the final message of the session.

@@ -187,7 +187,7 @@ export default function CourseScreen() {
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Button
               kind="secondary"
-              label="Ask about the course"
+              label="Ask in chat"
               icon="forum"
               onPress={() => router.push(`/course/${id}/chat`)}
               style={{ flex: 1 }}

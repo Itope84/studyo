@@ -148,8 +148,12 @@ export function ChatScreen({ id }: { id: string }) {
           {chat.data && messages.length === 0 ? (
             <Empty
               icon="forum"
-              title="Ask about this topic"
-              body="Answers come from the pack and its saved sources, with links. If the material doesn't cover it, the answer says so."
+              title={isCourse ? 'Ask about this course' : 'Ask about this topic'}
+              body={
+                isCourse
+                  ? 'Good for questions across chapters. It looks at the course map first, then opens only the chapters it needs.'
+                  : "Answers come from the pack and its saved sources, with links. If the material doesn't cover it, the answer says so."
+              }
             />
           ) : null}
           {messages.map((m) => (
