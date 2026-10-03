@@ -118,8 +118,12 @@ export const api = {
   createTopicFromPdf: (form: FormData) => request<TopicWithJob>('POST', '/topics', form),
   updateTopic: (id: string, body: UpdateTopic) =>
     request<Topic>('PATCH', `/topics/${enc(id)}`, body),
-  upload: (id: string, form: FormData) =>
-    request<Resource>('POST', `/topics/${enc(id)}/resources`, form),
+  upload: (
+    id: string,
+    form: FormData,
+    onProgress?: (p: UploadProgress) => void,
+    signal?: AbortSignal,
+  ) => upload<Resource>(`/topics/${enc(id)}/resources`, form, onProgress, signal),
   rendered: (id: string, rid: string) =>
     request<Rendered>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/rendered`),
   addBookmark: (id: string, body: { resource_id: string; position: number; note?: string }) =>
@@ -241,4 +245,65 @@ export async function sameOriginServer(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export interface UploadProgress {
+  sent: number;
+  total: number;
+  /** Bytes per second, averaged since the upload began. */
+  rate: number;
+}
+
+/**
+ * Multipart upload with progress (fetch can't report upload progress; XMLHttpRequest can, on web and native).
+ * `onProgress` is first called once bytes start leaving the device, so a long wait before that means the
+ * device is still reading the file (for example downloading it from iCloud).
+ */
+export function upload<T>(
+  path: string,
+  form: FormData,
+  onProgress?: (p: UploadProgress) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const c = conn();
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${c.url}${path}`);
+    for (const [k, v] of Object.entries(authHeaders(c))) xhr.setRequestHeader(k, v);
+    const started = Date.now();
+    xhr.upload.onprogress = (e) => {
+      const secs = Math.max(0.25, (Date.now() - started) / 1000);
+      onProgress?.({
+        sent: e.loaded,
+        total: e.lengthComputable ? e.total : 0,
+        rate: e.loaded / secs,
+      });
+    };
+    xhr.onload = () => {
+      let json: unknown = null;
+      try {
+        json = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(json as T);
+      const err = (json as { error?: { code?: string; message?: string } } | null)?.error;
+      reject(
+        new ApiError(
+          xhr.status,
+          err?.code ?? 'http',
+          err?.message ?? `The server answered ${xhr.status}.`,
+        ),
+      );
+    };
+    xhr.onerror = () =>
+      reject(
+        new ApiError(
+          0,
+          'offline',
+          'The upload was cut off before it finished. Keep Studyo open while it uploads, and check the connection.',
+        ),
+      );
+    xhr.onabort = () => reject(new ApiError(0, 'aborted', 'Upload cancelled.'));
+    signal?.addEventListener('abort', () => xhr.abort());
+    xhr.send(form as unknown as XMLHttpRequestBodyInit);
+  });
 }

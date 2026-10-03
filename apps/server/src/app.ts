@@ -133,6 +133,19 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   });
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'No such endpoint.' } }, 404));
 
+  // Uploads are logged when they start and finish, so a slow connection shows up in the server's output.
+  app.use('*', async (c, next) => {
+    const len = Number(c.req.header('Content-Length') ?? 0);
+    if (c.req.method !== 'POST' || len < 1024 * 1024) return next();
+    const started = Date.now();
+    console.log(`upload started: ${c.req.path} ${(len / 1048576).toFixed(1)} MB`);
+    await next();
+    const secs = (Date.now() - started) / 1000;
+    console.log(
+      `upload finished: ${c.req.path} ${c.res.status} in ${secs.toFixed(1)}s (${(len / 1048576 / Math.max(secs, 0.01)).toFixed(1)} MB/s)`,
+    );
+  });
+
   const tokenBuf = Buffer.from(config.token);
   app.use('*', async (c, next) => {
     const path = c.req.path;

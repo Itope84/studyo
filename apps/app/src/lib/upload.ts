@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 
 export interface Picked {
   name: string;
+  /** Bytes, when the picker knows. */
+  size: number;
   form: FormData;
 }
 
@@ -29,7 +31,7 @@ export async function pickFile(
     } as unknown as Blob);
   }
   for (const [k, v] of Object.entries(extra)) form.append(k, v);
-  return { name: asset.name, form };
+  return { name: asset.name, size: asset.size ?? 0, form };
 }
 
 /**

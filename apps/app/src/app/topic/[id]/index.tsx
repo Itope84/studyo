@@ -25,7 +25,7 @@ import {
   T,
   timeAgo,
 } from '@/components/ui';
-import { ApiError, api, fileUrl } from '@/lib/api';
+import { ApiError, api, fileUrl, type UploadProgress } from '@/lib/api';
 import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
@@ -45,6 +45,12 @@ export default function TopicScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [download, setDownload] = useState<Resource | null>(null);
+  const [uploading, setUploading] = useState<{
+    name: string;
+    size: number;
+    progress: UploadProgress | null;
+    controller: AbortController;
+  } | null>(null);
 
   if (!q.data) {
     return (
@@ -95,16 +101,32 @@ export default function TopicScreen() {
   };
 
   const enrich = () => run('enrich', () => api.startJob(id, { kind: 'enrich' }));
-  const addFile = () =>
-    run('upload', async () => {
-      const picked = await pickFile(
-        [...MEDIA_TYPES, ...(Platform.OS === 'web' ? ['.md', 'text/markdown'] : ['text/markdown'])],
-        {},
+  const addFile = async () => {
+    setError(null);
+    const picked = await pickFile(
+      [...MEDIA_TYPES, ...(Platform.OS === 'web' ? ['.md', 'text/markdown'] : ['text/markdown'])],
+      {},
+    );
+    if (!picked) return;
+    picked.form.append('made_with', /notebooklm/i.test(picked.name) ? 'NotebookLM' : '');
+    const controller = new AbortController();
+    setUploading({ name: picked.name, size: picked.size, progress: null, controller });
+    try {
+      await api.upload(
+        id,
+        picked.form,
+        (p) => setUploading((u) => (u ? { ...u, progress: p } : u)),
+        controller.signal,
       );
-      if (!picked) return;
-      picked.form.append('made_with', /notebooklm/i.test(picked.name) ? 'NotebookLM' : '');
-      await api.upload(id, picked.form);
-    });
+      await queryClient.invalidateQueries({ queryKey: keys.topic(id) });
+    } catch (e) {
+      if (!(e instanceof ApiError && e.code === 'aborted')) {
+        setError(e instanceof ApiError ? e.message : (e as Error).message);
+      }
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const playMedia = async (r: Resource) => {
     if (r.type === 'video') {
@@ -192,6 +214,7 @@ export default function TopicScreen() {
           }
         />
       ) : null}
+      {uploading ? <UploadCard {...uploading} /> : null}
       {error ? (
         <Notice tone="danger" icon="error-outline" title="That didn't work" body={error} />
       ) : null}
@@ -238,7 +261,7 @@ export default function TopicScreen() {
               label="Add file"
               icon="add"
               onPress={addFile}
-              busy={busy === 'upload'}
+              busy={!!uploading}
               disabled={!online}
               style={{ flex: 1 }}
             />
@@ -290,7 +313,7 @@ export default function TopicScreen() {
               label="Add file"
               icon="upload-file"
               onPress={addFile}
-              busy={busy === 'upload'}
+              busy={!!uploading}
               disabled={!online}
             />
           )
@@ -883,5 +906,51 @@ function DeeperSheet({
       />
       {error ? <Notice tone="danger" title={error} /> : null}
     </Sheet>
+  );
+}
+
+/** An upload in flight: how much has been sent and how fast, so a slow connection is visible. */
+function UploadCard({
+  name,
+  size,
+  progress,
+  controller,
+}: {
+  name: string;
+  size: number;
+  progress: UploadProgress | null;
+  controller: AbortController;
+}) {
+  const { c } = useTheme();
+  const total = progress?.total || size;
+  const fraction = progress && total ? progress.sent / total : 0;
+  const mb = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
+  const status = !progress
+    ? 'Starting…'
+    : fraction >= 0.999
+      ? 'Saving on the server…'
+      : `${Math.round(fraction * 100)}% · ${mb(progress.sent)} of ${mb(total)} · ${mb(progress.rate)}/s`;
+  return (
+    <View
+      style={{
+        marginTop: space.md,
+        borderRadius: radius.base,
+        backgroundColor: c.surface,
+        padding: space.md,
+        gap: space.sm,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Icon name="upload-file" size={18} tone="primary" />
+        <T variant="label" numberOfLines={1} style={{ flex: 1 }}>
+          Uploading {name}
+        </T>
+        <Button kind="ghost" label="Cancel" onPress={() => controller.abort()} />
+      </View>
+      <ProgressBar value={fraction} height={3} />
+      <T variant="meta" tone="lead">
+        {status}
+      </T>
+    </View>
   );
 }
