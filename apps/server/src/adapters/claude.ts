@@ -94,7 +94,8 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
             if (!Array.isArray(content)) return;
             for (const block of content) {
               if (block.type === 'tool_result' && block.is_error) {
-                const text = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+                const text =
+                  typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
                 onEvent({ type: 'stderr', text: `Tool failed: ${text.slice(0, 300)}` });
               }
             }

@@ -8,7 +8,7 @@ import {
 } from '@expo-google-fonts/newsreader';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -25,6 +25,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Shell() {
   const { c, scheme } = useTheme();
   const connection = usePrefs((s) => s.connection);
+  const pathname = usePathname();
+
+  // Without a server there is nothing to show: any deep link goes to Connect first.
+  useEffect(() => {
+    if (!connection && pathname !== '/connect') router.replace('/connect');
+  }, [connection, pathname]);
 
   useEffect(() => {
     if (!connection) {

@@ -79,65 +79,62 @@ Check: the spec lints clean, and `pc-ca-mcts/topic.json` validates against the T
 
 ### 2. Library (read side) + app foundation + Home, Topic, Settings
 Server:
-- [ ] Config (library path, token, port), auth middleware, CORS
-- [ ] Library scanner with auto-discovery; `GET /topics`, `GET /topics/{id}`, `PATCH /topics/{id}`
-- [ ] `GET /files/{path}` with Range; `GET/PUT /topics/{id}/progress`; `GET /health`, `GET/PUT /settings`
+- [x] Config (library path, token, port), auth middleware, CORS
+- [x] Library scanner with auto-discovery; `GET /topics`, `GET /topics/{id}`, `PATCH /topics/{id}`
+- [x] `GET /files/{path}` with Range; `GET/PUT /topics/{id}/progress`; `GET /health`, `GET/PUT /settings`
 
 App:
-- [ ] Expo with expo-router, web target; theme tokens (light and dark), Newsreader and Geist
-- [ ] Components: ListRow, StatusBadge, Button, IconButton (48 and 56px), Sheet, EmptyState, OfflineNotice
-- [ ] Generated API client; online/offline store; first run leads to the connect screen
-- [ ] Home, Topic and Settings screens with empty, loading, offline and failed states
+- [x] Expo with expo-router, web target; theme tokens (light and dark), Newsreader and Geist
+- [x] Components: Row, Badge, Button, IconButton (48 and 56px), Sheet, Empty, Notice, Input
+- [x] API client typed from the generated contract; online/offline store; first run leads to the connect screen
+- [x] Home, Topic and Settings screens with empty, loading, offline and failed states
 
-Check: the app lists and opens the real library from a laptop browser; stopping the server greys out the right things, with reasons.
+Check: done. The app lists and opens the library from a laptop browser; blocking the server shows "Server offline" and greys out server actions with a reason (e2e test 4).
 
 ### 3. Reading
-- [ ] Renderer: front matter, provenance blocks, callouts, figures, mermaid, citations, heading ids, position hook, light and dark, loud failures
-- [ ] Free-form `svg` and `html` blocks: sanitised, token-aware, sandboxed
-- [ ] `studyo-render` CLI; the server re-renders on file change and on renderer version bump
-- [ ] Update `render-contract.md` (components, free-form rules, guidance)
-- [ ] Reader screen: resume position, open source, mark as read
+- [x] Renderer: front matter, provenance blocks, callouts, figures, mermaid, citations, heading ids, position hook, light and dark, loud failures
+- [x] Free-form `svg` and `html` blocks: sanitised, token-aware, sandboxed
+- [x] `studyo-render` CLI; the server re-renders whenever a document is opened with stale HTML (older than its Markdown, or from an older renderer) and after every job
+- [x] Update `render-contract.md` (components, free-form rules, guidance)
+- [x] Reader screen: resume position, outline, open source, mark as read, jump to a section from chat
 
-Check: the `pc-ca-mcts` pack and condensed doc render well on phone and desktop in both themes; snapshot tests pass; the position survives a reload.
+Check: done. Both fixture documents render on phone and desktop in both themes (screenshots checked); 10 renderer tests pass.
 
 ### 4. Listening
-- [ ] Add file (`POST /topics/{id}/resources`), multipart upload into `outputs/`
-- [ ] Player and mini-player dock: scrub, skip back and forward, speed, resume, auto-next, video fullscreen
-- [ ] Progress sync, with the most recent write winning
+- [x] Add file (`POST /topics/{id}/resources`), multipart upload into `outputs/`
+- [x] Player and mini-player dock: scrub, skip back and forward, speed, resume, auto-next; video screen with fullscreen
+- [x] Progress sync, with the most recent write winning
 
-Check: upload an audio file from the browser, play, close the tab, reopen, and it resumes at the same spot.
+Check: done for upload, play, dock and resume from Home (e2e test 3, server tests). Lock-screen and background audio are wired through expo-audio but only matter on Android (brief step 4).
 
 ### 5. Jobs and AI state
-- [ ] SQLite job store and event log; a queue that runs one job at a time
-- [ ] CLI adapter interface; Claude Code adapter; OpenCode adapter; replay adapter for tests
-- [ ] Skill invocation with `topic_path` and `interactive`; tool and write-scope limits per skill (D4)
-- [ ] `needs_input` round trip: questions JSON, answers, session resume
-- [ ] `GET /events` with replay and heartbeat; `GET /jobs/{id}` with recent log lines
-- [ ] App: event-stream client with the resume procedure from P2
-- [ ] Add topic screen (link, PDF or name; enrich-now switch); live job progress in Topic and Home; failed state with log
-- [ ] Question sheet for `needs_input`; condensed-doc flow (choose scope, then questions)
-- [ ] Renderer runs automatically when a skill finishes
+- [x] SQLite job store and event log; a work queue that runs one job at a time, plus a separate chat lane
+- [x] CLI adapter interface; Claude Code adapter; OpenCode adapter; replay adapter for tests
+- [x] Skill invocation with `topic_path` and `interactive: app`
+- [ ] Tool and write-scope limits per skill (D4). For now: work jobs get file, web and shell tools; chat is read-only; MCP servers are off in unattended runs; time limits per job kind. Per-skill write scopes are still to do.
+- [x] `needs_input` round trip: questions JSON, answers, session resume
+- [x] `GET /events` with replay, resync and heartbeat; `GET /jobs/{id}` with recent log lines
+- [x] App: event-stream client with the resume procedure from P2 (visibility, online, AppState)
+- [x] Add topic screen (link, PDF or name; build-now switch); live job progress in Topic and Home; failed state with log
+- [x] Question screen for `needs_input`; condensed-doc flow (choose whole pack or sections, then questions)
+- [x] Renderer runs automatically when a skill finishes
 
-Check: paste a real link on the web app and get a rendered pack, with level questions answered in the app, once with Claude Code and once with OpenCode. Close the tab while it's running, reopen, and the state is correct.
+Check: done in replay (e2e test 1, server tests). Real runs: Claude Code enrich on a real link asked its level question through the app, paused, resumed with the answers and built the pack. Chat verified with both Claude Code and OpenCode. A full OpenCode enrich run has not been tried yet.
 
 ### 6. Chat, Inbox, Profile
-- [ ] Chat via the `answer` skill in the topic's session; streamed replies kept on the server; citations; the "enrich further" offer starts a job
-- [ ] Inbox: list, assign to a topic, new topic from a file
-- [ ] Profile view and edit (`library/profile.md`); mark a topic read adds `via: read`
+- [x] Chat via the `answer` skill; first chat forks the enrichment session, later ones resume the chat session; streamed replies saved on the server; citations; the "enrich further" offer starts a deep job
+- [x] Inbox: list, upload, assign to a topic, new topic from a PDF
+- [x] Profile view and edit (`library/profile.md`); "Mark topic as read" adds its concepts with `via: read`
 
-Check: ask a question, close the tab mid-reply, reopen, and the full reply is there with working source links.
+Check: done for chat in replay (e2e test 2) and real CLIs. The reply is saved as it streams, so reopening mid-reply shows it.
 
 ### 7. Notifications, layouts, polish
-- [ ] Web Push: subscription, server sender, notifications for `needs_input`, done and failed; test on an iPhone Home Screen web app
-- [ ] Tablet (2-column) and desktop (3-column) layouts
-- [ ] Accessibility pass: hit sizes, contrast, screen-reader labels
-- [ ] Deploy the web build (for example a Worker); run the server under launchd or systemd
+- [ ] Web Push: built (VAPID keys, subscriptions, service worker, notifications for needs_input, done and failed) but **not yet tested on an iPhone**, which needs HTTPS
+- [ ] Tablet (2-column) and desktop (3-column) layouts. Today the app is a centred single column at every width.
+- [ ] Accessibility pass: hit sizes and labels are in place; contrast and screen-reader review still to do
+- [x] Serve the web build: the server hosts it on :8788; `scripts/install-launchd.sh` runs the server at login (not installed for you)
 
-Check: browser tests pass at phone, tablet and desktop widths; an iPhone gets a push for a question while the app is closed, and tapping it opens the question.
-
-## Cleanup
-Fixtures to remove once their slice's endpoints exist:
-- (none yet)
+Check: not done. Push on an iPhone and the wide layouts are the open items.
 
 ## Not in this plan
 Android offline downloads and background audio (brief step 4), the share menu, Android Auto. These follow once the web app works end to end.

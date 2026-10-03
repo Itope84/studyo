@@ -13,7 +13,10 @@
     "format": "biome format --write .",
     "e2e": "playwright test",
     "dev:server": "pnpm --filter @studyo/server dev",
-    "dev:app": "pnpm --filter @studyo/app web"
+    "dev:app": "pnpm --filter @studyo/app web",
+    "build:web": "pnpm --filter @studyo/app build:web",
+    "start": "pnpm build:web && pnpm --filter @studyo/server start",
+    "demo": "node scripts/demo.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

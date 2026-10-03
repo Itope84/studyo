@@ -88,3 +88,26 @@ test('the app survives the server going away and coming back', async ({ page }) 
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect(v(page.getByText('Live'))).toBeVisible({ timeout: 40_000 });
 });
+
+test('closing the app mid-job and reopening it shows the waiting question', async ({ browser }) => {
+  const context = await browser.newContext();
+  const first = await context.newPage();
+  await connect(first);
+  await v(first.getByRole('button', { name: 'Add topic' })).click();
+  await v(first.getByRole('button', { name: 'Topic name' })).click();
+  await v(first.getByLabel('Topic')).fill('Bloom filters');
+  await v(first.getByRole('button', { name: 'Add and build' })).click();
+  await expect(v(first.getByRole('heading', { name: 'Bloom filters' }))).toBeVisible();
+  // Close the tab while the job is still running, as iOS does to a backgrounded web app.
+  await first.close();
+
+  // Wait long enough for the job to reach its question while nobody is connected.
+  await new Promise((r) => setTimeout(r, 5000));
+  const again = await context.newPage();
+  await again.goto('/');
+  await expect(v(again.getByText('Studyo has a question'))).toBeVisible({ timeout: 20_000 });
+  await shot(again, '11-reopened-question');
+  await v(again.getByText('Studyo has a question')).click();
+  await expect(v(again.getByText('Which of these do you already understand?'))).toBeVisible();
+  await context.close();
+});

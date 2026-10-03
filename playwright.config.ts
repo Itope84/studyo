@@ -7,7 +7,11 @@ export default defineConfig({
   timeout: 90_000,
   workers: 1,
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${APP_PORT}`, ...devices['iPhone 13'], browserName: 'chromium' },
+  use: {
+    baseURL: `http://localhost:${APP_PORT}`,
+    ...devices['iPhone 13'],
+    browserName: 'chromium',
+  },
   webServer: [
     {
       command: 'node scripts/e2e-server.mjs',

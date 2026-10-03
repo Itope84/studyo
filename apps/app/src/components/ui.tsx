@@ -359,7 +359,7 @@ export function Row({
       >
         {leading ? <View style={styles.rowLead}>{leading}</View> : null}
         <View style={{ flex: 1, gap: 3 }}>
-          <T variant="rowTitle" numberOfLines={2}>
+          <T variant="rowTitle" numberOfLines={3}>
             {title}
           </T>
           {typeof subtitle === 'string' ? (

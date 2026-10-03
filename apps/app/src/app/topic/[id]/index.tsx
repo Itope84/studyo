@@ -25,7 +25,7 @@ import {
   timeAgo,
 } from '@/components/ui';
 import { ApiError, api, fileUrl } from '@/lib/api';
-import { useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
 import { MEDIA_TYPES, pickFile } from '@/lib/upload';
@@ -35,6 +35,7 @@ export default function TopicScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useTopic(id);
   const liveJob = useTopicJob(id);
+  const activeJobs = useActiveJobs();
   const { online, reason } = useOnline();
   const server = useServerInfo();
   const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more'>(null);
@@ -59,12 +60,12 @@ export default function TopicScreen() {
   }
 
   const { topic, progress, jobs } = q.data;
-  const activeJob =
-    liveJob ??
-    jobs.find(
-      (j) => ['queued', 'running', 'needs_input'].includes(j.status) && j.lane === 'work',
-    ) ??
-    null;
+  // The live job list wins once loaded; the topic snapshot can lag a just-finished job.
+  const activeJob = activeJobs.data
+    ? liveJob
+    : (jobs.find(
+        (j) => ['queued', 'running', 'needs_input'].includes(j.status) && j.lane === 'work',
+      ) ?? null);
   const lastFailed = !activeJob
     ? jobs.find((j) => j.lane === 'work' && j.status === 'failed')
     : undefined;
