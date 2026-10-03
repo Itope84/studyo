@@ -6,8 +6,10 @@ export interface Picked {
   /** Bytes, when the picker knows. */
   size: number;
   form: FormData;
-  /** The file itself, where it can be cut into pieces (web). Native uploads send the form as one request. */
+  /** The file itself on web, which can be cut into pieces. */
   blob?: Blob;
+  /** On native, the file's location, which is read piece by piece. */
+  uri?: string;
 }
 
 /** Let the person pick a file and wrap it as multipart form data under `file`. */
@@ -38,6 +40,7 @@ export async function pickFile(
     size: asset.size ?? 0,
     form,
     blob: Platform.OS === 'web' ? (asset.file ?? undefined) : undefined,
+    uri: Platform.OS === 'web' ? undefined : asset.uri,
   };
 }
 

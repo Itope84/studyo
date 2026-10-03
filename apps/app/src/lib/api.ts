@@ -142,7 +142,7 @@ export const api = {
     request<Topic>('PATCH', `/topics/${enc(id)}`, body),
   upload: (
     id: string,
-    picked: { form: FormData; blob?: Blob },
+    picked: { form: FormData; blob?: Blob; uri?: string; size?: number },
     madeWith: string,
     onProgress?: (p: UploadProgress) => void,
     signal?: AbortSignal,
@@ -324,7 +324,7 @@ export interface UploadProgress {
  */
 export function upload<T>(
   path: string,
-  form: FormData | Blob,
+  form: FormData | Blob | ArrayBufferView,
   onProgress?: (p: UploadProgress) => void,
   signal?: AbortSignal,
   contentType?: string,
@@ -376,61 +376,107 @@ export function upload<T>(
 /** Each piece of a big upload. Well under the 100 MB a Cloudflare request may carry. */
 const CHUNK = 16 * 1024 * 1024;
 
+/** Where a file's pieces come from: a Blob on web, a file read in order on native. */
+interface Source {
+  size: number;
+  /** The next piece, in order. */
+  next(length: number): Blob | Uint8Array;
+  close(): void;
+}
+
+async function openSource(picked: {
+  blob?: Blob;
+  uri?: string;
+  size?: number;
+}): Promise<Source | null> {
+  const blob = picked.blob;
+  if (blob) {
+    let at = 0;
+    return {
+      size: blob.size,
+      next: (n) => {
+        const piece = blob.slice(at, at + n);
+        at += n;
+        return piece;
+      },
+      close: () => {},
+    };
+  }
+  if (picked.uri) {
+    // Native: read the file in order, one piece in memory at a time.
+    const { File, FileMode } = await import('expo-file-system');
+    const handle = new File(picked.uri).open(FileMode.ReadOnly);
+    const size = handle.size ?? picked.size ?? 0;
+    if (!size) {
+      handle.close();
+      return null;
+    }
+    return { size, next: (n) => handle.readBytes(n), close: () => handle.close() };
+  }
+  return null;
+}
+
 /**
  * Add audio, video or a document to a topic. Big files go up in pieces, one request each, so no single request
- * hits a proxy's body limit; a piece that fails on the network is sent again (up to three tries). Where the file
- * can't be cut up (native), or it is small, it is one request.
+ * hits a proxy's body limit; a piece that fails on the network is sent again (up to three tries). Small files,
+ * and files that can't be read in pieces, are one request.
  */
 export async function uploadResource(
   id: string,
-  picked: { form: FormData; blob?: Blob },
+  picked: { form: FormData; blob?: Blob; uri?: string; size?: number },
   madeWith: string,
   onProgress?: (p: UploadProgress) => void,
   signal?: AbortSignal,
 ): Promise<Resource> {
-  const blob = picked.blob;
-  if (!blob || blob.size <= CHUNK) {
+  // The picker's size is 0 when it doesn't know; then open the file and let it say.
+  const known = picked.blob?.size ?? (picked.size || Number.POSITIVE_INFINITY);
+  const source = known > CHUNK ? await openSource(picked) : null;
+  if (!source) {
     picked.form.append('made_with', madeWith);
     return upload<Resource>(`/topics/${enc(id)}/resources`, picked.form, onProgress, signal);
   }
-  const name = (picked.form.get('file') as File | null)?.name ?? 'file';
+  const name = (picked.form.get('file') as { name?: string } | null)?.name ?? 'file';
   const uploadId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
   const started = Date.now();
   let result: Resource | null = null;
-  for (let offset = 0; offset < blob.size; offset += CHUNK) {
-    const piece = blob.slice(offset, offset + CHUNK);
-    const query = new URLSearchParams({
-      upload_id: uploadId,
-      name,
-      offset: String(offset),
-      total: String(blob.size),
-    });
-    if (madeWith) query.set('made_with', madeWith);
-    for (let attempt = 1; ; attempt++) {
-      try {
-        const reply = await upload<Resource | { received: number }>(
-          `/topics/${enc(id)}/resources/chunks?${query}`,
-          piece,
-          (p) =>
-            onProgress?.({
-              sent: offset + p.sent,
-              total: blob.size,
-              rate: (offset + p.sent) / Math.max(0.25, (Date.now() - started) / 1000),
-            }),
-          signal,
-          'application/octet-stream',
-        );
-        if ('id' in reply) result = reply;
-        break;
-      } catch (e) {
-        const retry =
-          e instanceof ApiError && (e.status === 0 || e.status >= 500) && e.code !== 'aborted';
-        if (!retry || attempt >= 3) throw e;
-        await new Promise((r) => setTimeout(r, 1000 * attempt));
+  try {
+    for (let offset = 0; offset < source.size; offset += CHUNK) {
+      const piece = source.next(Math.min(CHUNK, source.size - offset));
+      const query = new URLSearchParams({
+        upload_id: uploadId,
+        name,
+        offset: String(offset),
+        total: String(source.size),
+      });
+      if (madeWith) query.set('made_with', madeWith);
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const reply = await upload<Resource | { received: number }>(
+            `/topics/${enc(id)}/resources/chunks?${query}`,
+            piece,
+            (p) =>
+              onProgress?.({
+                sent: offset + p.sent,
+                total: source.size,
+                rate: (offset + p.sent) / Math.max(0.25, (Date.now() - started) / 1000),
+              }),
+            signal,
+            'application/octet-stream',
+          );
+          if ('id' in reply) result = reply;
+          break;
+        } catch (e) {
+          const retry =
+            e instanceof ApiError && (e.status === 0 || e.status >= 500) && e.code !== 'aborted';
+          if (!retry || attempt >= 3) throw e;
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
       }
     }
+  } finally {
+    source.close();
   }
   if (!result)
     throw new ApiError(500, 'upload_failed', 'The upload finished but nothing was added.');
