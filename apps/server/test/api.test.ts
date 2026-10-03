@@ -85,6 +85,93 @@ describe('server basics', () => {
     expect((await s.call('GET', '/topics/pc-ca-mcts/resources/S1/pdf')).status).toBe(422);
   });
 
+  it('keeps study packs out of Continue', async () => {
+    s = await makeServer();
+    await s.call('PUT', '/topics/pc-ca-mcts/progress', {
+      resource_id: 'condensed-all-2026-10-03',
+      position: 0.2,
+      updated: '2026-10-03T09:00:00Z',
+    });
+    await s.call('PUT', '/topics/pc-ca-mcts/progress', {
+      resource_id: 'pack',
+      position: 0.5,
+      updated: '2026-10-03T10:00:00Z',
+    });
+    const home = (await s.call('GET', '/topics')).json;
+    expect(home.continue.resource.id).toBe('condensed-all-2026-10-03');
+    const detail = (await s.call('GET', '/topics/pc-ca-mcts')).json;
+    expect(detail.topic.cover_path).toBe('pack/assets/S1-fig1.png');
+  });
+
+  it('adds and removes bookmarks on audio', async () => {
+    s = await makeServer();
+    const form = new FormData();
+    form.append('file', new File([new Uint8Array(2048)], 'talk.mp3', { type: 'audio/mpeg' }));
+    const audio = (await s.call('POST', '/topics/pc-ca-mcts/resources', form)).json;
+    const added = await s.call('POST', '/topics/pc-ca-mcts/bookmarks', {
+      resource_id: audio.id,
+      position: 42.5,
+      note: 'landmarks',
+    });
+    expect(added.status).toBe(201);
+    expectSchema('Progress', added.json);
+    expect(added.json.bookmarks[0]).toMatchObject({
+      resource_id: audio.id,
+      position: 42.5,
+      note: 'landmarks',
+    });
+    expect(
+      (await s.call('POST', '/topics/pc-ca-mcts/bookmarks', { resource_id: 'pack', position: 1 }))
+        .status,
+    ).toBe(400);
+    const removed = await s.call(
+      'DELETE',
+      `/topics/pc-ca-mcts/bookmarks/${added.json.bookmarks[0].id}`,
+    );
+    expect(removed.json.bookmarks).toEqual([]);
+  });
+
+  it('renames and deletes inbox files', async () => {
+    s = await makeServer();
+    const form = new FormData();
+    form.append('file', new File(['hello'], 'Notes 1.md', { type: 'text/markdown' }));
+    const item = (await s.call('POST', '/inbox', form)).json;
+    const renamed = await s.call('PATCH', `/inbox/${encodeURIComponent(item.name)}`, {
+      name: 'Raft notes',
+    });
+    expect(renamed.status).toBe(200);
+    expect(renamed.json.name).toBe('Raft notes.md');
+    expectSchema('InboxItem', renamed.json);
+    expect((await s.call('PATCH', '/inbox/..%2Ftopic.json', { name: 'x' })).status).toBe(404);
+    expect((await s.call('DELETE', `/inbox/${encodeURIComponent('Raft notes.md')}`)).status).toBe(
+      204,
+    );
+    expect((await s.call('GET', '/inbox')).json.items).toEqual([]);
+  });
+
+  it('serves the API under /api next to the web app', async () => {
+    s = await makeServer();
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'studyo-web-'));
+    writeFileSync(join(dir, 'index.html'), '<html>app</html>');
+    const { webApp } = await import('../src/web.ts');
+    const web = webApp(dir, s.app) as NonNullable<ReturnType<typeof webApp>>;
+    const health = await web.request('/api/health');
+    expect((await health.json()).name).toBe('studyo');
+    const topics = await web.request('/api/topics', {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    expect(topics.status).toBe(200);
+    const posted = await web.request('/api/topics/pc-ca-mcts/progress', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resource_id: 'pack', position: 0.1, updated: '2026-10-03T08:00:00Z' }),
+    });
+    expect(posted.status).toBe(200);
+    expect(await (await web.request('/topic/anything')).text()).toContain('app');
+  });
+
   it('answers Range requests', async () => {
     s = await makeServer();
     const res = await s.app.request('/files/topics/pc-ca-mcts/pack/assets/S1-fig1.png', {
@@ -103,8 +190,9 @@ describe('server basics', () => {
     const stale = await put(0.1, '2026-10-03T09:00:00Z');
     expect(stale.json.items.pack.position).toBe(0.5);
     expectSchema('Progress', stale.json);
+    // A study pack is never offered in Continue.
     const home = (await s.call('GET', '/topics')).json;
-    expect(home.continue.resource.id).toBe('pack');
+    expect(home.continue).toBeNull();
   });
 
   it('uploads media into outputs with a title', async () => {

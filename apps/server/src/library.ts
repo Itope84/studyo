@@ -95,6 +95,7 @@ export class Library {
       delete (r as Partial<Resource>).url;
       delete (r as Partial<Resource>).description;
       delete (r as Partial<Resource>).read_minutes;
+      delete (r as Partial<Resource>).chapters;
     }
     writeJsonAtomic(join(this.topicDir(id), 'topic.json'), stored);
   }
@@ -121,23 +122,25 @@ export class Library {
       const htmlPath = r.path.replace(/\.md$/, '.html');
       const isDoc = (r.type === 'pack' || r.type === 'condensed') && r.path.endsWith('.md');
       const info = isDoc ? await docFacts(join(dir, r.path)) : null;
+      const isMedia = r.type === 'audio' || r.type === 'video';
       resources.push({
         ...r,
         html_path: r.path.endsWith('.md') && existsSync(join(dir, htmlPath)) ? htmlPath : null,
         url: ledger.get(r.id) ?? ledger.get(r.path) ?? null,
         description: info?.description ?? null,
         read_minutes: info ? Math.max(1, Math.round(info.words / WORDS_PER_MINUTE)) : null,
+        chapters: isMedia ? await mediaChapters(join(dir, r.path)) : null,
       });
     }
     const packInfo = resources.find((r) => r.type === 'pack')?.description ?? null;
     const summary =
       typeof manifest.summary === 'string' && manifest.summary.trim() ? manifest.summary : packInfo;
-    return { ...manifest, summary, resources };
+    return { ...manifest, summary, cover_path: await findCover(dir), resources };
   }
 
   async readProgress(id: string): Promise<Progress> {
     const raw = await readJson<Partial<Progress>>(join(this.topicDir(id), 'progress.json'));
-    return { items: raw?.items ?? {}, last: raw?.last ?? null };
+    return { items: raw?.items ?? {}, last: raw?.last ?? null, bookmarks: raw?.bookmarks ?? [] };
   }
 
   writeProgress(id: string, progress: Progress) {
@@ -167,7 +170,7 @@ export class Library {
       updated: now,
     };
     this.writeManifest(id, manifest);
-    this.writeProgress(id, { items: {}, last: null });
+    this.writeProgress(id, { items: {}, last: null, bookmarks: [] });
     return manifest;
   }
 
@@ -185,19 +188,26 @@ export class Library {
     return summarise(topic, progress, activeJob);
   }
 
-  /** The most recent unfinished item across all topics, for Home's Continue card. */
+  /**
+   * The most recent unfinished audio, video or condensed doc across all topics, for Home's Continue card.
+   * Study packs are reference material and never show here.
+   */
   async continueItem(ids: string[]): Promise<ContinueItem | null> {
     let best: ContinueItem | null = null;
     for (const id of ids) {
       const progress = await this.readProgress(id);
-      if (!progress.last) continue;
-      const item = progress.items[progress.last.resource_id];
-      if (!item || item.done) continue;
-      if (best && best.item.updated >= item.updated) continue;
+      const candidates = Object.entries(progress.items)
+        .filter(([, item]) => !item.done && (!best || item.updated > best.item.updated))
+        .sort((a, b) => b[1].updated.localeCompare(a[1].updated));
+      if (!candidates.length) continue;
       const topic = await this.readTopic(id, { persist: false });
       if (topic.status === 'archived') continue;
-      const resource = topic.resources.find((r) => r.id === progress.last?.resource_id);
-      if (resource) best = { topic_id: id, topic_title: topic.title, resource, item };
+      for (const [rid, item] of candidates) {
+        const resource = topic.resources.find((r) => r.id === rid);
+        if (!resource || !CONTINUABLE.has(resource.type)) continue;
+        best = { topic_id: id, topic_title: topic.title, resource, item };
+        break;
+      }
     }
     return best;
   }
@@ -231,6 +241,54 @@ export function summarise(topic: Topic, progress: Progress, activeJob: Job | nul
 }
 
 const WORDS_PER_MINUTE = 230;
+const CONTINUABLE = new Set<ResourceType>(['audio', 'video', 'condensed']);
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
+
+/** The first figure saved with the pack (or a condensed doc), for cover art. */
+async function findCover(dir: string): Promise<string | null> {
+  for (const sub of ['pack/assets', 'outputs/assets']) {
+    const files = (await readdir(join(dir, sub)).catch(() => [] as string[]))
+      .filter((f) => IMAGE_EXT.test(f) && !f.startsWith('.'))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (files[0]) return `${sub}/${files[0]}`;
+  }
+  return null;
+}
+
+/** Chapter markers inside an audio or video file, cached by modification time. */
+const chapterCache = new Map<
+  string,
+  { mtime: number; chapters: { title: string; start: number }[] | null }
+>();
+async function mediaChapters(path: string): Promise<{ title: string; start: number }[] | null> {
+  try {
+    const { mtimeMs } = await stat(path);
+    const hit = chapterCache.get(path);
+    if (hit && hit.mtime === mtimeMs) return hit.chapters;
+    const meta = await parseFile(path, {
+      includeChapters: true,
+      duration: false,
+      skipCovers: true,
+    });
+    const raw = meta.format.chapters ?? [];
+    const rate = meta.format.sampleRate ?? 1;
+    const chapters = raw.length
+      ? raw.map((c, i) => ({
+          title: c.title || `Chapter ${i + 1}`,
+          // start/timeScale is seconds; without a time scale fall back to the sample offset, then milliseconds.
+          start: c.timeScale
+            ? c.start / c.timeScale
+            : c.sampleOffset !== undefined
+              ? c.sampleOffset / rate
+              : c.start / 1000,
+        }))
+      : null;
+    chapterCache.set(path, { mtime: mtimeMs, chapters });
+    return chapters;
+  } catch {
+    return null;
+  }
+}
 
 /** How far through one item: a document's scroll fraction, or media position over duration. */
 function itemFraction(r: Resource, progress: Progress): number {

@@ -13,6 +13,8 @@ async function track<T>(p: Promise<T>): Promise<T> {
     return v;
   } catch (e) {
     if (e instanceof ApiError && e.offline) useLive.getState().set({ reachable: false });
+    if (e instanceof ApiError && e.code === 'access_expired')
+      useLive.getState().set({ accessExpired: true });
     throw e;
   }
 }

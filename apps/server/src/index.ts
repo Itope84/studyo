@@ -32,7 +32,7 @@ const server = serve({ fetch: app.fetch, port: config.port, hostname: config.hos
 });
 
 const webDir = process.env.STUDYO_WEB_DIR ?? join(REPO_ROOT, 'apps/app/dist');
-const web = webApp(webDir);
+const web = webApp(webDir, app);
 const webPort = Number(process.env.STUDYO_WEB_PORT ?? config.port + 1);
 const webServer = web
   ? serve({ fetch: web.fetch, port: webPort, hostname: config.host }, () => {
@@ -42,6 +42,9 @@ const webServer = web
         `Web app on http://localhost:${webPort} (from ${relative(process.cwd(), webDir) || webDir})`,
       );
       console.log(`Setup link (connects straight away): ${link}`);
+      console.log(
+        `Behind a tunnel (one hostname for app and API): https://<host>/connect?server=https://<host>/api&token=${encodeURIComponent(config.token)}`,
+      );
     })
   : null;
 if (!web) console.log('No web build found; run `pnpm build:web` to serve the app from here too.');

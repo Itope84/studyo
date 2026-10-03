@@ -10,6 +10,8 @@ export interface Track {
   topicTitle: string;
   resource: Resource;
   url: string;
+  /** Cover art: the pack's first figure, if any. */
+  cover: string | null;
 }
 
 interface PlayerState {
@@ -88,7 +90,9 @@ export function topicQueue(
   topicTitle: string,
   resources: Resource[],
   fileToken: string,
+  coverPath: string | null = null,
 ): Track[] {
+  const cover = coverPath ? fileUrl(fileToken, `topics/${topicId}/${coverPath}`) : null;
   return resources
     .filter((r) => r.type === 'audio')
     .map((r) => ({
@@ -96,6 +100,7 @@ export function topicQueue(
       topicTitle,
       resource: r,
       url: fileUrl(fileToken, `topics/${topicId}/${r.path}`),
+      cover,
     }));
 }
 
@@ -127,6 +132,7 @@ export async function play(track: Track, queue: Track[] = [track], startAt?: num
       title: track.resource.title,
       artist: track.topicTitle,
       albumTitle: 'Studyo',
+      artworkUrl: track.cover ?? undefined,
     });
   } catch {
     // Not supported on this platform.

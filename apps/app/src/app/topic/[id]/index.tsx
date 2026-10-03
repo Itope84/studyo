@@ -2,7 +2,7 @@ import type { Progress, Rendered, Resource, Topic } from '@studyo/api';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
@@ -30,7 +30,7 @@ import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
 import { MEDIA_TYPES, pickFile } from '@/lib/upload';
-import { space } from '@/theme';
+import { radius, space, useTheme } from '@/theme';
 
 export default function TopicScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,7 +39,9 @@ export default function TopicScreen() {
   const activeJobs = useActiveJobs();
   const { online, reason } = useOnline();
   const server = useServerInfo();
-  const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more'>(null);
+  const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more' | 'reenrich'>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [download, setDownload] = useState<Resource | null>(null);
@@ -108,7 +110,7 @@ export default function TopicScreen() {
     }
     const token = server.data?.file_token;
     if (!token) return;
-    const queue = topicQueue(id, topic.title, topic.resources, token);
+    const queue = topicQueue(id, topic.title, topic.resources, token, topic.cover_path ?? null);
     const track = queue.find((t) => t.resource.id === r.id);
     const item = progress.items[r.id];
     if (track) await play(track, queue, item && !item.done ? item.position : 0);
@@ -120,12 +122,14 @@ export default function TopicScreen() {
         <Header
           right={
             <>
-              <IconButton
-                name="forum"
-                label="Ask about this topic"
-                onPress={() => router.push(`/topic/${id}/chat`)}
-                disabled={!docs.length && !sources.length}
-              />
+              {!pack ? (
+                <IconButton
+                  name="forum"
+                  label="Ask about this topic"
+                  onPress={() => router.push(`/topic/${id}/chat`)}
+                  disabled={!docs.length && !sources.length}
+                />
+              ) : null}
               <IconButton name="more-vert" label="More" onPress={() => setSheet('more')} />
             </>
           }
@@ -197,9 +201,9 @@ export default function TopicScreen() {
         />
       ) : null}
 
-      {/* The one primary action, by state. */}
-      <View style={{ marginTop: space.lg, gap: space.sm }}>
-        {!pack && !busyTopic ? (
+      {/* No pack yet: building it is the one thing to do. Otherwise, the topic's actions. */}
+      {!pack && !busyTopic ? (
+        <View style={{ marginTop: space.lg }}>
           <Button
             label="Build the study pack"
             icon="auto-awesome"
@@ -208,20 +212,36 @@ export default function TopicScreen() {
             disabled={!online}
             hint={offlineReason}
           />
-        ) : null}
-        {pack ? (
+        </View>
+      ) : null}
+      {pack ? (
+        <View style={{ gap: space.sm, marginTop: space.lg }}>
           <Button
-            label={
-              progress.items[pack.id] && !progress.items[pack.id]?.done
-                ? 'Keep reading the pack'
-                : 'Read the pack'
-            }
-            icon="menu-book"
-            onPress={() => router.push(`/topic/${id}/read/${pack.id}`)}
-            disabled={!online}
+            label="Ask in chat"
+            icon="forum"
+            onPress={() => router.push(`/topic/${id}/chat`)}
           />
-        ) : null}
-      </View>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Button
+              kind="secondary"
+              label="Re-enrich"
+              icon="autorenew"
+              onPress={() => setSheet('reenrich')}
+              disabled={!online || busyTopic}
+              style={{ flex: 1 }}
+            />
+            <Button
+              kind="secondary"
+              label="Add file"
+              icon="add"
+              onPress={addFile}
+              busy={busy === 'upload'}
+              disabled={!online}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      ) : null}
 
       {topic.learning?.goal || topic.learning?.gaps?.length ? (
         <LearningBlock topic={topic} />
@@ -261,32 +281,36 @@ export default function TopicScreen() {
 
       <SectionTitle
         right={
-          <Button
-            kind="ghost"
-            label="Add file"
-            icon="upload-file"
-            onPress={addFile}
-            busy={busy === 'upload'}
-            disabled={!online}
-          />
+          pack ? undefined : (
+            <Button
+              kind="ghost"
+              label="Add file"
+              icon="upload-file"
+              onPress={addFile}
+              busy={busy === 'upload'}
+              disabled={!online}
+            />
+          )
         }
       >
-        Listen and watch
+        {media.length ? `Listen and watch · ${media.length}` : 'Listen and watch'}
       </SectionTitle>
       {media.length === 0 ? (
         <T variant="bodySmall" tone="lead" style={{ paddingVertical: space.sm }}>
           Make audio or video from the pack in NotebookLM, then add the file here.
         </T>
       ) : (
-        media.map((r) => (
-          <MediaRow
-            key={r.id}
-            r={r}
-            progress={progress}
-            onPlay={() => void playMedia(r)}
-            online={online}
-          />
-        ))
+        <View style={{ gap: space.sm }}>
+          {media.map((r) => (
+            <MediaCard
+              key={r.id}
+              r={r}
+              progress={progress}
+              onPlay={() => void playMedia(r)}
+              online={online}
+            />
+          ))}
+        </View>
       )}
 
       <SectionTitle>{`Sources${sources.length ? ` (${sources.length})` : ''}`}</SectionTitle>
@@ -356,6 +380,15 @@ export default function TopicScreen() {
         onClose={() => setSheet(null)}
         topicId={id}
         packId={pack?.id ?? null}
+      />
+      <ReenrichSheet
+        open={sheet === 'reenrich'}
+        onClose={() => setSheet(null)}
+        onRebuild={() => {
+          setSheet(null);
+          void enrich();
+        }}
+        onDeeper={() => setSheet('deeper')}
       />
       <DeeperSheet open={sheet === 'deeper'} onClose={() => setSheet(null)} topicId={id} />
     </Screen>
@@ -472,7 +505,7 @@ function DocRow({
   );
 }
 
-function MediaRow({
+function MediaCard({
   r,
   progress,
   onPlay,
@@ -483,45 +516,114 @@ function MediaRow({
   onPlay: () => void;
   online: boolean;
 }) {
+  const { c } = useTheme();
   const current = usePlayer((s) => s.track?.resource.id === r.id);
   const playing = usePlayer((s) => s.playing && s.track?.resource.id === r.id);
   const item = progress.items[r.id];
   const duration = item?.duration ?? r.duration ?? 0;
   const fraction = item?.done ? 1 : duration ? (item?.position ?? 0) / duration : 0;
+  const marks = progress.bookmarks.filter((b) => b.resource_id === r.id).length;
+  const bits = [
+    duration ? formatTime(duration) : r.type === 'video' ? 'Video' : 'Audio',
+    r.made_with,
+    item && !item.done && duration ? `${formatTime(duration - item.position)} left` : null,
+    marks ? `${marks} bookmark${marks > 1 ? 's' : ''}` : null,
+  ].filter(Boolean);
   return (
-    <Row
-      title={r.title}
-      active={current}
-      leading={<Icon name={r.type === 'video' ? 'movie' : 'graphic-eq'} size={20} tone="primary" />}
-      subtitle={
-        <View style={{ gap: 6 }}>
-          <View
-            style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center', flexWrap: 'wrap' }}
-          >
-            <T variant="meta" tone="lead">
-              {duration ? formatTime(duration) : r.type === 'video' ? 'Video' : 'Audio'}
-              {r.made_with ? ` · ${r.made_with}` : ''}
-              {item && !item.done && duration
-                ? ` · ${formatTime(duration - item.position)} left`
-                : ''}
-            </T>
-            {item?.done ? <Badge kind="ready" label="Done" /> : null}
-          </View>
-          {item && !item.done ? <ProgressBar value={fraction} /> : null}
-        </View>
-      }
-      trailing={
-        <IconButton
-          name={playing ? 'pause' : 'play-arrow'}
-          label={playing ? 'Pause' : `Play ${r.title}`}
-          onPress={onPlay}
-          disabled={!online}
-        />
-      }
+    <Pressable
       onPress={onPlay}
       disabled={!online}
-      disabledReason="Needs the server"
-    />
+      accessibilityRole="button"
+      accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${r.title}`}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        padding: space.sm + 4,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: current ? c.primary : c.rule,
+        backgroundColor: current ? c.tint : pressed ? c.surface : c.surfaceRaised,
+        opacity: online ? 1 : 0.5,
+      })}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: radius.lg,
+          backgroundColor: c.primarySoft,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name={r.type === 'video' ? 'movie' : 'graphic-eq'} size={22} tone="primary" />
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <T variant="rowTitle" numberOfLines={2}>
+          {r.title}
+        </T>
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}
+        >
+          <T variant="meta" tone="lead">
+            {bits.join(' · ')}
+          </T>
+          {item?.done ? <Badge kind="ready" label="Done" /> : null}
+        </View>
+        {item && !item.done ? <ProgressBar value={fraction} /> : null}
+        {!online ? (
+          <T variant="meta" tone="faint">
+            Needs the server
+          </T>
+        ) : null}
+      </View>
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: current ? c.primary : c.surface,
+        }}
+      >
+        <Icon
+          name={playing ? 'pause' : 'play-arrow'}
+          size={26}
+          tone={current ? 'onPrimary' : 'ink'}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function ReenrichSheet({
+  open,
+  onClose,
+  onRebuild,
+  onDeeper,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onRebuild: () => void;
+  onDeeper: () => void;
+}) {
+  return (
+    <Sheet open={open} onClose={onClose} title="Re-enrich">
+      <Row
+        title="Go deeper"
+        subtitle="Add more sources on one part, with checks against them. Keeps the current pack and builds on it."
+        leading={<Icon name="travel-explore" size={22} tone="primary" />}
+        onPress={onDeeper}
+      />
+      <Row
+        title="Rebuild the pack"
+        subtitle="Start again from the original. Replaces the current pack; condensed docs and media stay."
+        leading={<Icon name="autorenew" size={22} tone="lead" />}
+        onPress={onRebuild}
+      />
+    </Sheet>
   );
 }
 

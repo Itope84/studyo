@@ -21,7 +21,10 @@ You answer from the topic's own material. You do not answer from your own knowle
 3. **Write the answer.**
    - Pitch the wording at the learner's level, using `library/profile.md` if present. Level changes how you phrase, never what the sources say.
    - Cite as in `grounding-and-citations.md`. Cite with reference-style links, and where it helps point to the place in the pack with its section id: `(pack: #section-id)` so the app can open the Reader there.
-   - Quote short key passages. If sources disagree, show both.
+   - Quote short key passages, each as its own blockquote line ending with its citation, so the app can show it as a citation card:
+     `> "An inclusion proof for a certificate consists of the hash of each sibling node…" [S4]`
+     If sources disagree, show both.
+   - Maths uses `$…$` inline and `$$…$$` on its own lines (LaTeX).
    - Be as short as the question allows.
 
 4. **If it is not covered or only partly:** offer to enrich further, naming the specific thing, for example "I can search for sources on X and add them to the pack". Finish the reply with a final line on its own:

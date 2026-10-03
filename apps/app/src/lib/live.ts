@@ -20,13 +20,18 @@ interface LiveState {
   /** Whether the server answered recently (stream or request). `null` until we know. */
   reachable: boolean | null;
   lastError: string | null;
-  set: (patch: Partial<Pick<LiveState, 'status' | 'reachable' | 'lastError'>>) => void;
+  /** Cloudflare Access wants the person to sign in again. */
+  accessExpired: boolean;
+  set: (
+    patch: Partial<Pick<LiveState, 'status' | 'reachable' | 'lastError' | 'accessExpired'>>,
+  ) => void;
 }
 
 export const useLive = create<LiveState>((set) => ({
   status: 'idle',
   reachable: null,
   lastError: null,
+  accessExpired: false,
   set: (patch) => set(patch),
 }));
 

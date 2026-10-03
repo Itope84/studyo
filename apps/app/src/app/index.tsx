@@ -2,11 +2,13 @@ import type { ContinueItem, Job, TopicSummary } from '@studyo/api';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ConnectionMark, StatusMark, TopicBadge } from '@/components/status';
+import { ServerMark, Wordmark } from '@/components/brand';
+import { TopicBadge } from '@/components/status';
 import {
   Button,
   Empty,
   formatTime,
+  IconButton,
   Loading,
   Notice,
   ProgressBar,
@@ -27,6 +29,10 @@ export default function Home() {
   const topics = useTopics();
   const jobs = useActiveJobs();
   const { online } = useOnline();
+  const dismissed = usePrefs((s) => s.dismissedContinue);
+  const dismiss = usePrefs((s) => s.dismissContinue);
+  const sort = usePrefs((s) => s.homeSort);
+  const setSort = usePrefs((s) => s.setHomeSort);
 
   if (!connection) return <Redirect href="/connect" />;
 
@@ -47,14 +53,8 @@ export default function Home() {
             minHeight: 56,
           }}
         >
-          <T
-            variant="headline"
-            style={{ fontFamily: fonts.contentMedium, flex: 1 }}
-            accessibilityRole="header"
-          >
-            Studyo
-          </T>
-          <ConnectionMark />
+          <Wordmark />
+          <ServerMark />
         </View>
       }
       footer={
@@ -94,9 +94,20 @@ export default function Home() {
         />
       ))}
 
-      {data?.continue ? <ContinueCard item={data.continue} /> : null}
+      {data?.continue && dismissed !== continueKey(data.continue) ? (
+        <ContinueCard
+          item={data.continue}
+          onDismiss={() => dismiss(continueKey(data.continue as ContinueItem))}
+        />
+      ) : null}
 
-      <SectionTitle>Topics</SectionTitle>
+      <SectionTitle
+        right={
+          data && data.topics.length > 1 ? <SortMenu value={sort} onChange={setSort} /> : undefined
+        }
+      >
+        Topics
+      </SectionTitle>
       {topics.isLoading ? <Loading label="Loading your library" /> : null}
       {data && data.topics.length === 0 ? (
         <Empty
@@ -105,7 +116,7 @@ export default function Home() {
           body="Add a link, a PDF or just a topic name. The server builds a study pack from real sources."
         />
       ) : null}
-      {data?.topics.map((t) => (
+      {sortTopics(data?.topics ?? [], sort).map((t) => (
         <TopicRow key={t.id} topic={t} job={activeByTopic.get(t.id) ?? t.active_job ?? null} />
       ))}
       {data ? <ArchivedToggle show={archived} onToggle={() => setArchived((v) => !v)} /> : null}
@@ -125,7 +136,6 @@ function TopicRow({ topic, job }: { topic: TopicSummary; job: Job | null }) {
   return (
     <Row
       title={topic.title}
-      leading={<StatusMark status={topic.status} job={job} />}
       onPress={() => router.push(`/topic/${topic.id}`)}
       accessibilityLabel={`${topic.title}, open topic`}
       subtitle={
@@ -215,7 +225,7 @@ function QuestionBanner({ job, title }: { job: Job; title?: string }) {
   );
 }
 
-function ContinueCard({ item }: { item: ContinueItem }) {
+function ContinueCard({ item, onDismiss }: { item: ContinueItem; onDismiss: () => void }) {
   const { c } = useTheme();
   const server = useServerInfo();
   const current = usePlayer((s) => s.track);
@@ -230,13 +240,23 @@ function ContinueCard({ item }: { item: ContinueItem }) {
 
   const resume = async () => {
     if (!isMedia || r.type === 'video') {
-      router.push(r.type === 'video' ? '/player' : `/topic/${item.topic_id}/read/${r.id}`);
+      router.push(
+        r.type === 'video'
+          ? `/topic/${item.topic_id}/watch/${r.id}`
+          : `/topic/${item.topic_id}/read/${r.id}`,
+      );
       return;
     }
     const fileToken = server.data?.file_token;
     if (!fileToken) return;
     const detail = await api.topic(item.topic_id);
-    const queue = topicQueue(item.topic_id, item.topic_title, detail.topic.resources, fileToken);
+    const queue = topicQueue(
+      item.topic_id,
+      item.topic_title,
+      detail.topic.resources,
+      fileToken,
+      detail.topic.cover_path ?? null,
+    );
     const track = queue.find((t) => t.resource.id === r.id);
     if (track) await play(track, queue, item.item.position);
   };
@@ -248,26 +268,40 @@ function ContinueCard({ item }: { item: ContinueItem }) {
         marginTop: space.md,
         borderRadius: radius.base,
         backgroundColor: c.surface,
-        padding: space.md,
+        paddingVertical: space.sm,
+        paddingLeft: space.md,
+        paddingRight: space.xs,
         gap: space.sm,
       }}
     >
-      <T variant="caps" tone="lead">
-        Continue
-      </T>
-      <T variant="title" numberOfLines={2}>
-        {r.title}
-      </T>
-      <T variant="meta" tone="lead">
-        {item.topic_title} · {left}
-      </T>
-      <ProgressBar value={fraction} />
-      <Button
-        label={isMedia ? 'Resume' : 'Keep reading'}
-        icon={isMedia ? 'play-arrow' : 'menu-book'}
-        onPress={() => void resume()}
-        style={{ marginTop: space.xs }}
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Pressable
+          style={{ flex: 1, gap: 2 }}
+          onPress={() => void resume()}
+          accessibilityRole="button"
+          accessibilityLabel={`Continue ${r.title}`}
+        >
+          <T variant="caps" tone="lead">
+            Continue {isMedia ? 'listening' : 'reading'}
+          </T>
+          <T variant="rowTitle" numberOfLines={1}>
+            {r.title}
+          </T>
+          <T variant="meta" tone="lead" numberOfLines={1}>
+            {left} · {item.topic_title}
+          </T>
+        </Pressable>
+        <IconButton
+          name={isMedia ? 'play-arrow' : 'menu-book'}
+          label={isMedia ? 'Resume' : 'Keep reading'}
+          filled
+          onPress={() => void resume()}
+        />
+        <IconButton name="close" label="Hide this" tone="lead" onPress={onDismiss} />
+      </View>
+      <View style={{ paddingRight: space.sm }}>
+        <ProgressBar value={fraction} />
+      </View>
     </View>
   );
 }
@@ -301,5 +335,31 @@ function ArchivedList() {
         <TopicRow key={t.id} topic={t} job={null} />
       ))}
     </>
+  );
+}
+
+const continueKey = (c: ContinueItem) => `${c.topic_id}:${c.resource.id}`;
+
+type Sort = 'recent' | 'title' | 'progress';
+
+function sortTopics(list: TopicSummary[], sort: Sort): TopicSummary[] {
+  const copy = [...list];
+  if (sort === 'title') copy.sort((a, b) => a.title.localeCompare(b.title));
+  else if (sort === 'progress') copy.sort((a, b) => a.progress.fraction - b.progress.fraction);
+  else copy.sort((a, b) => b.updated.localeCompare(a.updated));
+  return copy;
+}
+
+const SORT_LABEL: Record<Sort, string> = {
+  recent: 'Recent first',
+  title: 'A to Z',
+  progress: 'Least done first',
+};
+
+function SortMenu({ value, onChange }: { value: Sort; onChange: (s: Sort) => void }) {
+  const order: Sort[] = ['recent', 'title', 'progress'];
+  const next = order[(order.indexOf(value) + 1) % order.length] as Sort;
+  return (
+    <Button kind="ghost" icon="sort" label={SORT_LABEL[value]} onPress={() => onChange(next)} />
   );
 }

@@ -1,11 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import type {
   AnswerSet,
   AssignInbox,
   ChatHistory,
   CliId,
+  CreateBookmark,
   CreateJob,
   CreateTopic,
   Job,
@@ -19,6 +20,7 @@ import type {
   TopicWithJob,
   UpdateTopic,
 } from '@studyo/api';
+import { writeSharedAssets } from '@studyo/renderer';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -44,6 +46,7 @@ import {
   badRequest,
   conflict,
   HttpError,
+  newId,
   notFound,
   nowIso,
   safeJoin,
@@ -63,6 +66,8 @@ const MAX_UPLOAD = 1024 * 1024 * 1024; // 1 GB
 
 export async function createServer(config: Config, options: ServerOptions = {}) {
   mkdirSync(config.stateDir, { recursive: true });
+  // Shared renderer assets (mermaid, KaTeX) are needed by chat maths too, before any document is rendered.
+  writeSharedAssets(join(config.stateDir, 'assets'));
   const library = new Library(config.library);
   const db = openDb(config.stateDir, options.dbFile);
   const bus = new EventBus(db);
@@ -429,6 +434,43 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return c.json(progress);
   });
 
+  // ---- Bookmarks ------------------------------------------------------------
+
+  app.post('/topics/:id/bookmarks', async (c) => {
+    const id = c.req.param('id');
+    const topic = await library.readTopic(id, { persist: false });
+    const body = await json<CreateBookmark>(c);
+    const resource = topic.resources.find((r) => r.id === body.resource_id);
+    if (!resource || (resource.type !== 'audio' && resource.type !== 'video')) {
+      throw badRequest('Bookmarks are for audio and video.');
+    }
+    if (typeof body.position !== 'number' || body.position < 0)
+      throw badRequest('position must be seconds.');
+    const progress = await library.readProgress(id);
+    progress.bookmarks.push({
+      id: newId('bm'),
+      resource_id: resource.id,
+      position: body.position,
+      note: body.note?.trim() || null,
+      created: nowIso(),
+    });
+    library.writeProgress(id, progress);
+    bus.emit('topic.updated', { topic_id: id });
+    return c.json(progress, 201);
+  });
+
+  app.delete('/topics/:id/bookmarks/:bid', async (c) => {
+    const id = c.req.param('id');
+    if (!(await library.exists(id))) throw notFound('Topic');
+    const progress = await library.readProgress(id);
+    const before = progress.bookmarks.length;
+    progress.bookmarks = progress.bookmarks.filter((b) => b.id !== c.req.param('bid'));
+    if (progress.bookmarks.length === before) throw notFound('Bookmark');
+    library.writeProgress(id, progress);
+    bus.emit('topic.updated', { topic_id: id });
+    return c.json(progress);
+  });
+
   // ---- Jobs -----------------------------------------------------------------
 
   app.post('/topics/:id/jobs', async (c) => {
@@ -557,6 +599,42 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     bus.emit('inbox.updated', {});
     const item = (await listInbox(config.library)).find((i) => i.name === name);
     return c.json(item, 201);
+  });
+
+  const inboxFile = (name: string) => {
+    if (!name || name.includes('/') || name.startsWith('.') || name.startsWith('_'))
+      throw notFound('Inbox file');
+    const path = safeJoin(library.inboxDir, name);
+    if (!existsSync(path)) throw notFound('Inbox file');
+    return path;
+  };
+
+  app.patch('/inbox/:name', async (c) => {
+    const from = inboxFile(decodeURIComponent(c.req.param('name')));
+    const body = await json<{ name: string }>(c);
+    const raw = String(body.name ?? '').trim();
+    if (!raw) throw badRequest('Give the file a name.');
+    // Keep the original extension so the file keeps its type.
+    const ext = extname(from);
+    const stem = raw.toLowerCase().endsWith(ext.toLowerCase()) ? raw.slice(0, -ext.length) : raw;
+    const name = `${
+      stem
+        .replace(/[\\/:*?"<>|]+/g, ' ')
+        .replace(/^[._]+/, '')
+        .trim() || 'file'
+    }${ext}`;
+    const to = join(library.inboxDir, name);
+    if (existsSync(to) && to !== from)
+      throw conflict('A file with that name is already in the inbox.');
+    renameSync(from, to);
+    bus.emit('inbox.updated', {});
+    return c.json((await listInbox(config.library)).find((i) => i.name === name));
+  });
+
+  app.delete('/inbox/:name', async (c) => {
+    rmSync(inboxFile(decodeURIComponent(c.req.param('name'))));
+    bus.emit('inbox.updated', {});
+    return c.body(null, 204);
   });
 
   app.post('/inbox/assign', async (c) => {

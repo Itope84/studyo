@@ -16,8 +16,9 @@ import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { TabBar } from '@/components/TabBar';
+import { Button, Notice } from '@/components/ui';
 import { useChrome } from '@/lib/chrome';
-import { events, watchForeground } from '@/lib/live';
+import { events, useLive, watchForeground } from '@/lib/live';
 import { usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
 import { ThemeProvider, useTheme } from '@/theme';
@@ -77,8 +78,38 @@ function Shell() {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
       </Stack>
+      <AccessBanner />
       <MiniPlayer />
       {connection && tabs ? <TabBar /> : null}
+    </View>
+  );
+}
+
+/** Cloudflare Access sign-in expired: reloading the page takes the person through Access's login. */
+function AccessBanner() {
+  const expired = useLive((s) => s.accessExpired);
+  if (!expired) return null;
+  return (
+    <View
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 12, alignItems: 'center' }}
+    >
+      <View style={{ width: '100%', maxWidth: 720 }}>
+        <Notice
+          tone="info"
+          icon="lock-outline"
+          title="Sign in again"
+          body="Your Cloudflare Access sign-in has expired."
+          action={
+            <Button
+              label="Sign in"
+              icon="login"
+              onPress={() => {
+                if (Platform.OS === 'web') window.location.reload();
+              }}
+            />
+          }
+        />
+      </View>
     </View>
   );
 }

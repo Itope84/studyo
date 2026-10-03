@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { Input } from '@/components/inputs';
 import { Button, Field, Header, Notice, Screen, T } from '@/components/ui';
-import { ApiError, api } from '@/lib/api';
+import { ApiError, api, sameOriginServer } from '@/lib/api';
 import { type Connection, usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
 import { space } from '@/theme';
@@ -25,6 +25,7 @@ export default function Connect() {
   const [cfId, setCfId] = useState(existing?.cfClientId ?? '');
   const [cfSecret, setCfSecret] = useState(existing?.cfClientSecret ?? '');
   const [showCf, setShowCf] = useState(!!existing?.cfClientId);
+  const [sameOrigin, setSameOrigin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +67,19 @@ export default function Connect() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Served by the Studyo server itself (for example through a Cloudflare tunnel): use its own /api, which
+  // shares the page's origin and so its Cloudflare Access sign-in.
+  useEffect(() => {
+    if (params.server || existing) return;
+    void sameOriginServer().then((found) => {
+      if (found) {
+        setUrl(found);
+        setSameOrigin(true);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Screen header={<Header title="Connect" back={!!existing} />}>
       <View style={{ paddingTop: space.lg, gap: space.sm, marginBottom: space.lg }}>
@@ -75,7 +89,14 @@ export default function Connect() {
           printed when it started.
         </T>
       </View>
-      <Field label="Server address" hint="A Tailscale or tunnel address works too.">
+      <Field
+        label="Server address"
+        hint={
+          sameOrigin
+            ? "This app is served by your Studyo server, so it uses the server's own /api."
+            : 'A Tailscale or tunnel address works too.'
+        }
+      >
         <Input
           value={url}
           onChangeText={setUrl}

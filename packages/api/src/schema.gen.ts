@@ -242,6 +242,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topics/{topic_id}/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bookmark a moment in an audio or video file */
+        post: operations["addBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/bookmarks/{bookmark_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                bookmark_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a bookmark */
+        delete: operations["deleteBookmark"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topics/{topic_id}/jobs": {
         parameters: {
             query?: never;
@@ -376,6 +415,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/inbox/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file name inside `library/inbox/` */
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an inbox file */
+        delete: operations["deleteInbox"];
+        options?: never;
+        head?: never;
+        /** Rename an inbox file */
+        patch: operations["renameInbox"];
         trace?: never;
     };
     "/inbox/assign": {
@@ -545,6 +605,12 @@ export interface components {
             html_path?: string | null;
             /** @description Derived by the server. For a source saved from the web, its original URL (from the ledger). */
             url?: string | null;
+            /** @description Derived by the server for audio and video, from the file's own chapter markers. */
+            chapters?: {
+                title: string;
+                /** @description Seconds */
+                start: number;
+            }[] | null;
             /**
              * @description Derived by the server for packs and condensed docs: the front matter `description`, or else the first
              *     paragraph, shortened.
@@ -569,6 +635,8 @@ export interface components {
             /** @description Which CLI the session belongs to */
             session_cli?: components["schemas"]["CliId"] | null;
             resources: components["schemas"]["Resource"][];
+            /** @description Derived by the server. The first figure in the pack (or a condensed doc), relative to the topic folder, for cover art. */
+            cover_path?: string | null;
             learning?: components["schemas"]["Learning"] | null;
             failure_reason?: string | null;
             /** @description One sentence on what the topic is. Written by the enrich skills; falls back to the pack's description. */
@@ -599,6 +667,7 @@ export interface components {
             active_job?: components["schemas"]["Job"] | null;
             updated: string;
         };
+        /** @description The most recent unfinished audio, video or condensed doc. Study packs never appear here. */
         ContinueItem: {
             topic_id: string;
             topic_title: string;
@@ -666,10 +735,26 @@ export interface components {
             /** Format: date-time */
             updated: string;
         };
+        Bookmark: {
+            id: string;
+            resource_id: string;
+            /** @description Seconds into the audio or video */
+            position: number;
+            note?: string | null;
+            /** Format: date-time */
+            created: string;
+        };
+        CreateBookmark: {
+            resource_id: string;
+            position: number;
+            note?: string;
+        };
         Progress: {
             items: {
                 [key: string]: components["schemas"]["ProgressItem"];
             };
+            /** @description Timestamps the learner marked while listening, oldest first. Kept in progress.json. */
+            bookmarks: components["schemas"]["Bookmark"][];
             /** @description The item most recently played or read in this topic */
             last: {
                 resource_id: string;
@@ -1413,6 +1498,60 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    addBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookmark"];
+            };
+        };
+        responses: {
+            /** @description Added; returns the topic's progress */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Progress"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                bookmark_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed; returns the topic's progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Progress"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     createJob: {
         parameters: {
             query?: never;
@@ -1652,6 +1791,62 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    deleteInbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file name inside `library/inbox/` */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    renameInbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file name inside `library/inbox/` */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     assignInbox: {

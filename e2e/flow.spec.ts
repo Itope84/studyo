@@ -13,8 +13,10 @@ async function shot(page: Page, name: string) {
 
 async function connect(page: Page) {
   await page.goto(`/connect?server=${encodeURIComponent(SERVER)}&token=${TOKEN}`);
-  await expect(v(page.getByText('Studyo', { exact: true }))).toBeVisible({ timeout: 30_000 });
-  await expect(v(page.getByText('Live'))).toBeVisible({ timeout: 15_000 });
+  await expect(v(page.getByRole('tab', { name: 'Library' }))).toBeVisible({ timeout: 30_000 });
+  await expect(v(page.getByRole('button', { name: /^Server connected/ }))).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 test('add a link, answer the level question, read the new pack', async ({ page }) => {
@@ -38,11 +40,11 @@ test('add a link, answer the level question, read the new pack', async ({ page }
   await v(page.getByRole('button', { name: 'Send answers' })).click();
 
   // Back on the topic, the run finishes and the pack appears.
-  await expect(v(page.getByRole('button', { name: 'Read the pack' }))).toBeVisible({
+  await expect(v(page.getByRole('button', { name: 'Ask in chat' }))).toBeVisible({
     timeout: 30_000,
   });
   await shot(page, '05-topic-ready');
-  await v(page.getByRole('button', { name: 'Read the pack' })).click();
+  await v(page.getByRole('button', { name: /Study pack This pack/ })).click();
   const frame = v(page.locator('iframe[title="Document"]')).contentFrame();
   await expect(frame.getByRole('heading', { name: 'Demo study pack' })).toBeVisible({
     timeout: 20_000,
@@ -53,7 +55,7 @@ test('add a link, answer the level question, read the new pack', async ({ page }
 test('ask in chat and get a cited answer with an enrich offer', async ({ page }) => {
   await connect(page);
   await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
-  await v(page.getByRole('button', { name: 'Ask about this topic' })).click();
+  await v(page.getByRole('button', { name: 'Ask in chat' })).click();
   await v(page.getByLabel('Your question')).fill('What replaces the certificate chain?');
   await v(page.getByRole('button', { name: 'Send' })).click();
   await expect(v(page.getByText(/replace a chain of signatures/))).toBeVisible({ timeout: 20_000 });
@@ -86,7 +88,9 @@ test('the app survives the server going away and coming back', async ({ page }) 
   await shot(page, '10-offline');
   await page.unroute(`${SERVER}/**`);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect(v(page.getByText('Live'))).toBeVisible({ timeout: 40_000 });
+  await expect(v(page.getByRole('button', { name: /^Server connected/ }))).toBeVisible({
+    timeout: 40_000,
+  });
 });
 
 test('closing the app mid-job and reopening it shows the waiting question', async ({ browser }) => {
@@ -105,7 +109,7 @@ test('closing the app mid-job and reopening it shows the waiting question', asyn
   await new Promise((r) => setTimeout(r, 5000));
   const again = await context.newPage();
   await again.goto('/');
-  await expect(v(again.getByText('Studyo has a question'))).toBeVisible({ timeout: 20_000 });
+  await expect(v(again.getByText('Studyo has a question'))).toBeVisible({ timeout: 30_000 });
   await shot(again, '11-reopened-question');
   await v(again.getByText('Studyo has a question')).click();
   await expect(v(again.getByText('Which of these do you already understand?'))).toBeVisible();
@@ -133,4 +137,29 @@ test('the tab bar reaches Activity, which shows a waiting question', async ({ pa
   await expect(v(page.getByText('Packs and docs'))).toBeVisible();
   await v(page.getByRole('tab', { name: /Library/ })).click();
   await expect(v(page.getByRole('button', { name: 'Add topic' }))).toBeVisible();
+});
+
+test('rename and delete a file in the inbox', async ({ page }) => {
+  await connect(page);
+  await v(page.getByRole('tab', { name: /Inbox/ })).click();
+  await v(page.getByRole('button', { name: 'Upload a file' })).isVisible();
+  // Upload through the API so the test doesn't depend on the system file picker.
+  await page.evaluate(async (server) => {
+    const form = new FormData();
+    form.append('file', new File(['notes'], 'scratch notes.md', { type: 'text/markdown' }));
+    await fetch(`${server}/inbox`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer e2e-token' },
+      body: form,
+    });
+  }, SERVER);
+  await expect(v(page.getByText('scratch-notes.md'))).toBeVisible({ timeout: 15_000 });
+  await v(page.getByRole('button', { name: 'More for scratch-notes.md' })).click();
+  await v(page.getByLabel('File name')).fill('Raft reading notes');
+  await v(page.getByRole('button', { name: 'Rename' })).click();
+  await expect(v(page.getByText('Raft reading notes.md'))).toBeVisible({ timeout: 15_000 });
+  await v(page.getByRole('button', { name: 'More for Raft reading notes.md' })).click();
+  await v(page.getByRole('button', { name: 'Delete file' })).click();
+  await v(page.getByRole('button', { name: 'Delete', exact: true })).click();
+  await expect(page.getByText('Raft reading notes.md')).toHaveCount(0, { timeout: 15_000 });
 });

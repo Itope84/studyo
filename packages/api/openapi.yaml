@@ -11,6 +11,8 @@ info:
       catches up by fetching snapshots and replaying from its last event id. See `events.md`.
     - Every call except `GET /health` needs the access token as `Authorization: Bearer <token>`. When the server sits
       behind Cloudflare Access, clients also send `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
+    - The server that hosts the web app also serves this API under `/api` on the same origin. Behind Cloudflare
+      Access that lets the browser's Access login cookie cover both, so no service token is needed in a browser.
     - Media elements and the Reader's iframe cannot send headers, so files are also served under
       `/f/{file_token}/...`. The file token is derived from the access token, grants read access to files only,
       and is returned by `GET /server`.
@@ -344,6 +346,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /topics/{topic_id}/bookmarks:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    post:
+      tags: [progress]
+      summary: Bookmark a moment in an audio or video file
+      operationId: addBookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookmark' }
+      responses:
+        '201':
+          description: Added; returns the topic's progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/bookmarks/{bookmark_id}:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - name: bookmark_id
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [progress]
+      summary: Remove a bookmark
+      operationId: deleteBookmark
+      responses:
+        '200':
+          description: Removed; returns the topic's progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /topics/{topic_id}/jobs:
     parameters:
       - $ref: '#/components/parameters/TopicId'
@@ -523,6 +567,45 @@ paths:
               schema: { $ref: '#/components/schemas/InboxItem' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /inbox/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        description: The file name inside `library/inbox/`
+        schema: { type: string }
+    patch:
+      tags: [inbox]
+      summary: Rename an inbox file
+      operationId: renameInbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Renamed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [inbox]
+      summary: Delete an inbox file
+      operationId: deleteInbox
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /inbox/assign:
     post:
@@ -819,6 +902,17 @@ components:
         url:
           type: [string, 'null']
           description: Derived by the server. For a source saved from the web, its original URL (from the ledger).
+        chapters:
+          description: Derived by the server for audio and video, from the file's own chapter markers.
+          oneOf:
+            - type: array
+              items:
+                type: object
+                required: [title, start]
+                properties:
+                  title: { type: string }
+                  start: { type: number, description: Seconds }
+            - type: 'null'
         description:
           type: [string, 'null']
           description: |
@@ -857,6 +951,9 @@ components:
         resources:
           type: array
           items: { $ref: '#/components/schemas/Resource' }
+        cover_path:
+          type: [string, 'null']
+          description: Derived by the server. The first figure in the pack (or a condensed doc), relative to the topic folder, for cover art.
         learning:
           oneOf:
             - $ref: '#/components/schemas/Learning'
@@ -902,6 +999,7 @@ components:
 
     ContinueItem:
       type: object
+      description: The most recent unfinished audio, video or condensed doc. Study packs never appear here.
       required: [topic_id, topic_title, resource, item]
       properties:
         topic_id: { type: string }
@@ -1005,13 +1103,35 @@ components:
         done: { type: boolean }
         updated: { type: string, format: date-time }
 
+    Bookmark:
+      type: object
+      required: [id, resource_id, position, created]
+      properties:
+        id: { type: string }
+        resource_id: { type: string }
+        position: { type: number, description: Seconds into the audio or video }
+        note: { type: [string, 'null'] }
+        created: { type: string, format: date-time }
+
+    CreateBookmark:
+      type: object
+      required: [resource_id, position]
+      properties:
+        resource_id: { type: string }
+        position: { type: number }
+        note: { type: string }
+
     Progress:
       type: object
-      required: [items, last]
+      required: [items, last, bookmarks]
       properties:
         items:
           type: object
           additionalProperties: { $ref: '#/components/schemas/ProgressItem' }
+        bookmarks:
+          type: array
+          description: Timestamps the learner marked while listening, oldest first. Kept in progress.json.
+          items: { $ref: '#/components/schemas/Bookmark' }
         last:
           description: The item most recently played or read in this topic
           oneOf:

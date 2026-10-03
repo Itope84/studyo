@@ -6,7 +6,7 @@ import { DocFrame } from '@/components/DocFrame';
 import type { DocFrameHandle, DocMessage } from '@/components/DocFrame.types';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Sheet } from '@/components/Sheet';
-import { Header, IconButton, Loading, Notice, Row, Screen, T } from '@/components/ui';
+import { Header, IconButton, Loading, Notice, ProgressBar, Row, Screen, T } from '@/components/ui';
 import { ApiError, api, fileUrl } from '@/lib/api';
 import { useServerInfo, useTopic } from '@/lib/hooks';
 import { keys, queryClient } from '@/lib/query';
@@ -25,6 +25,7 @@ export default function Reader() {
   const frame = useRef<DocFrameHandle>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [pos, setPos] = useState<{ fraction: number; section: string | null } | null>(null);
   const [headings, setHeadings] = useState<{ id: string; depth: number; text: string }[]>([]);
   const [done, setDone] = useState(false);
   // The first theme goes in the URL; later changes are sent as messages, so the page doesn't reload.
@@ -95,6 +96,7 @@ export default function Reader() {
         }
       } else if (msg.type === 'studyo:position') {
         pending.current = { fraction: msg.fraction, section: msg.section };
+        setPos({ fraction: msg.fraction, section: msg.section });
         if (Date.now() - lastSave.current > 5000) void save(msg.fraction, msg.section);
       }
     },
@@ -151,6 +153,12 @@ export default function Reader() {
         />
       }
     >
+      {url && headings.length ? (
+        <ReadingStrip
+          headings={headings}
+          pos={pos ?? (saved ? { fraction: saved.position, section: saved.section ?? null } : null)}
+        />
+      ) : null}
       {url ? (
         <DocFrame ref={frame} url={url} onMessage={onMessage} />
       ) : (
@@ -197,5 +205,50 @@ export default function Reader() {
           ))}
       </Sheet>
     </Screen>
+  );
+}
+
+/** "Section 3 of 6 · 48% read": where you are, counted in top-level sections. */
+function ReadingStrip({
+  headings,
+  pos,
+}: {
+  headings: { id: string; depth: number; text: string }[];
+  pos: { fraction: number; section: string | null } | null;
+}) {
+  const { c } = useTheme();
+  const sections = headings.filter((h) => h.depth === 2);
+  let index = 0;
+  if (pos?.section) {
+    const at = headings.findIndex((h) => h.id === pos.section);
+    for (let i = 0; i <= at; i++) {
+      const h = headings[i];
+      if (h?.depth === 2) index = sections.indexOf(h) + 1;
+    }
+  }
+  const fraction = pos?.fraction ?? 0;
+  return (
+    <View
+      style={{
+        paddingHorizontal: space.md,
+        paddingTop: space.sm,
+        paddingBottom: space.xs,
+        gap: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: c.rule,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.md }}>
+        <T variant="meta" tone="lead" numberOfLines={1} style={{ flex: 1 }}>
+          {sections.length
+            ? `Section ${Math.max(1, index)} of ${sections.length}${index && sections[index - 1] ? ` · ${sections[index - 1]?.text}` : ''}`
+            : 'Reading'}
+        </T>
+        <T variant="meta" tone="primary">
+          {Math.round(fraction * 100)}% read
+        </T>
+      </View>
+      <ProgressBar value={fraction} />
+    </View>
   );
 }

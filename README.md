@@ -43,6 +43,16 @@ pnpm typecheck && pnpm lint
 - **iPhone:** open the link in Safari, then Share → Add to Home Screen. Notifications ("Studyo has a question", "Pack ready") only work from the Home Screen app **over HTTPS**. Put the server behind `tailscale serve` or a Cloudflare tunnel for that. Over plain `http://` everything else works.
 - **Keep the server running:** `scripts/install-launchd.sh` installs it as a login item that restarts on failure (`--uninstall` removes it). Logs go to `library/_studyo/server.log`.
 
+## Behind Cloudflare Access
+
+Use one hostname for both the app and the API, so Access's sign-in cookie covers everything:
+
+1. Point the tunnel at the **web port** (`http://localhost:8788`). That port serves the app and also the API under `/api`.
+2. Protect the hostname with an Access application (your email or Google login).
+3. Open `https://<host>/connect?server=https://<host>/api&token=<token>` once. Access asks you to sign in first, then the app connects. The server prints this link too.
+
+No service token is needed in the browser. When the sign-in expires, the app shows "Sign in again", which reloads the page through Access. Service tokens (Settings → Connect → "Server behind Cloudflare Access?") are for the Android app or for a web app hosted somewhere else.
+
 ## Settings worth knowing
 
 | Env var | Default | What it does |

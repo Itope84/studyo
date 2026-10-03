@@ -71,6 +71,13 @@ async function request<T>(
   try {
     res = await fetch(`${c.url}${path}`, { method, headers, body: payload });
   } catch {
+    if (await accessExpired(c)) {
+      throw new ApiError(
+        401,
+        'access_expired',
+        'Your Cloudflare Access sign-in has expired. Sign in again to continue.',
+      );
+    }
     throw new ApiError(0, 'offline', "Can't reach the server.");
   }
   if (res.status === 204) return undefined as T;
@@ -121,6 +128,13 @@ export const api = {
     request<Resource>('POST', `/topics/${enc(id)}/resources`, form),
   rendered: (id: string, rid: string) =>
     request<Rendered>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/rendered`),
+  addBookmark: (id: string, body: { resource_id: string; position: number; note?: string }) =>
+    request<Progress>('POST', `/topics/${enc(id)}/bookmarks`, body),
+  deleteBookmark: (id: string, bid: string) =>
+    request<Progress>('DELETE', `/topics/${enc(id)}/bookmarks/${enc(bid)}`),
+  renameInbox: (name: string, newName: string) =>
+    request<InboxItem>('PATCH', `/inbox/${enc(name)}`, { name: newName }),
+  deleteInbox: (name: string) => request<void>('DELETE', `/inbox/${enc(name)}`),
   pdf: (id: string, rid: string) =>
     request<Pdf>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/pdf`),
   markRead: (id: string) => request<Profile>('POST', `/topics/${enc(id)}/mark-read`),
@@ -162,4 +176,39 @@ export const api = {
 export function fileUrl(fileToken: string, libraryPath: string): string {
   const c = conn();
   return `${c.url}/f/${fileToken}/${libraryPath.split('/').map(enc).join('/')}`;
+}
+
+/**
+ * Behind Cloudflare Access, an expired sign-in turns every API call into a redirect to the login page, which
+ * fetch reports as a network error. When the app and API share an origin, a quick probe of a static file
+ * tells the two apart: a redirect means the session expired, not that the server is down.
+ */
+async function accessExpired(c: Connection): Promise<boolean> {
+  if (typeof window === 'undefined' || !window.location?.origin) return false;
+  if (!c.url.startsWith(window.location.origin)) return false;
+  try {
+    const probe = await fetch(`${window.location.origin}/manifest.json?probe=${Date.now()}`, {
+      redirect: 'manual',
+    });
+    return (
+      probe.type === 'opaqueredirect' ||
+      probe.status === 302 ||
+      probe.status === 401 ||
+      probe.status === 403
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** When the web app is served by a Studyo server, its API is on the same origin under /api. */
+export async function sameOriginServer(): Promise<string | null> {
+  if (typeof window === 'undefined' || !window.location?.origin?.startsWith('http')) return null;
+  try {
+    const res = await fetch(`${window.location.origin}/api/health`);
+    const body = (await res.json()) as { name?: string };
+    return body.name === 'studyo' ? `${window.location.origin}/api` : null;
+  } catch {
+    return null;
+  }
 }
