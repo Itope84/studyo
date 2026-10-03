@@ -234,6 +234,52 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /topics/{topic_id}/resources/chunks:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    post:
+      tags: [topics]
+      summary: Add a large file in pieces
+      description: |
+        For files too big for one request (a proxy such as Cloudflare caps a request body at 100 MB on its free
+        plan). Send the pieces in order as the raw request body (`application/octet-stream`), about 16 MB each,
+        with the same `upload_id` and `name`, the `offset` of the piece's first byte and the file's `total` size.
+        Pieces are appended in order. A piece the server already has is accepted again, so a failed request can
+        be retried. The reply to the last piece is the new resource, as for `POST /topics/{topic_id}/resources`;
+        earlier pieces get the bytes received so far.
+      operationId: addResourceChunk
+      parameters:
+        - { name: upload_id, in: query, required: true, schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,64}$' } }
+        - { name: name, in: query, required: true, schema: { type: string }, description: The file name }
+        - { name: offset, in: query, required: true, schema: { type: integer, minimum: 0 } }
+        - { name: total, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: title, in: query, schema: { type: string } }
+        - { name: made_with, in: query, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200':
+          description: Piece stored, more to come
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received: { type: integer, description: Bytes stored so far }
+        '201':
+          description: The last piece arrived and the resource was added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resource' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /topics/{topic_id}/resources/{resource_id}/rendered:
     parameters:
       - $ref: '#/components/parameters/TopicId'

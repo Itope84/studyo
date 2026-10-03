@@ -250,6 +250,43 @@ describe('server basics', () => {
   });
 });
 
+describe('chunked uploads', () => {
+  it('puts a file together from pieces, accepts a repeated piece and refuses a gap', async () => {
+    s = await makeServer();
+    const data = Buffer.from(Array.from({ length: 3000 }, (_, i) => i % 251));
+    const send = (offset: number, bytes: Buffer, extra = '') =>
+      s.app.request(
+        `/topics/pc-ca-mcts/resources/chunks?upload_id=abcd1234efgh&name=${encodeURIComponent('Big talk.mp3')}&offset=${offset}&total=${data.length}${extra}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/octet-stream' },
+          body: new Uint8Array(bytes),
+        },
+      );
+    const first = await send(0, data.subarray(0, 1000));
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ received: 1000 });
+    // The reply was lost and the piece is sent again.
+    expect((await send(0, data.subarray(0, 1000))).status).toBe(200);
+    // A piece that skips ahead is refused.
+    expect((await send(2000, data.subarray(2000))).status).toBe(409);
+    expect((await send(1000, data.subarray(1000, 2000))).status).toBe(200);
+    const last = await send(2000, data.subarray(2000), '&title=Big%20talk&made_with=NotebookLM');
+    expect(last.status).toBe(201);
+    const resource = await last.json();
+    expectSchema('Resource', resource);
+    expect(resource).toMatchObject({
+      type: 'audio',
+      title: 'Big talk',
+      path: 'outputs/big-talk.mp3',
+    });
+    expect(readFileSync(join(s.library, 'topics/pc-ca-mcts', resource.path)).equals(data)).toBe(
+      true,
+    );
+    expect((await send(0, Buffer.alloc(0))).status).toBe(400);
+  });
+});
+
 describe('jobs', () => {
   it('runs an enrich job through a question and on to a rendered pack', async () => {
     s = await makeServer();

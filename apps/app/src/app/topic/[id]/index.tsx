@@ -110,13 +110,13 @@ export default function TopicScreen() {
       {},
     );
     if (!picked) return;
-    picked.form.append('made_with', /notebooklm/i.test(picked.name) ? 'NotebookLM' : '');
     const controller = new AbortController();
     setUploading({ name: picked.name, size: picked.size, progress: null, controller });
     try {
       await api.upload(
         id,
-        picked.form,
+        picked,
+        /notebooklm/i.test(picked.name) ? 'NotebookLM' : '',
         (p) => setUploading((u) => (u ? { ...u, progress: p } : u)),
         controller.signal,
       );

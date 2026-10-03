@@ -1,5 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import type {
   AnswerSet,
@@ -385,29 +394,28 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return c.json(await library.readTopic(id, { persist: false }));
   });
 
-  app.post('/topics/:id/resources', async (c) => {
-    const id = c.req.param('id');
-    if (!(await library.exists(id))) throw notFound('Topic');
-    const form = await c.req.parseBody();
-    const file = form.file;
-    if (!(file instanceof File)) throw badRequest('Attach the file as "file".');
-    if (file.size > MAX_UPLOAD) throw new HttpError(413, 'too_large', 'That file is too large.');
-    const ext = extname(file.name).toLowerCase();
-    const type = mediaTypeFor(file.name) ?? (ext === '.md' ? 'condensed' : null);
+  /** Put a file in a topic's `outputs/` and add it to the manifest. `place` writes or moves it to `dest`. */
+  async function addResource(
+    id: string,
+    filename: string,
+    place: (dest: string) => void,
+    title: string,
+    madeWith: string,
+  ) {
+    const ext = extname(filename).toLowerCase();
+    const type = mediaTypeFor(filename) ?? (ext === '.md' ? 'condensed' : null);
     if (!type) throw badRequest('Add audio, video or a Markdown document.');
     const outDir = join(library.topicDir(id), 'outputs');
     mkdirSync(outDir, { recursive: true });
-    let name = `${slugify(basename(file.name, ext), 60)}${ext}`;
+    let name = `${slugify(basename(filename, ext), 60)}${ext}`;
     for (let n = 2; existsSync(join(outDir, name)); n++)
-      name = `${slugify(basename(file.name, ext), 56)}-${n}${ext}`;
-    writeFileSync(join(outDir, name), Buffer.from(await file.arrayBuffer()));
+      name = `${slugify(basename(filename, ext), 56)}-${n}${ext}`;
+    place(join(outDir, name));
     // Discovery adds it to the manifest with its duration; then apply the title and made_with given.
     const topic = await library.readTopic(id, { persist: !store.activeWork(id) });
     const resource = topic.resources.find((r) => r.path === `outputs/${name}`);
     if (!resource)
       throw new HttpError(500, 'upload_failed', 'The file was saved but could not be added.');
-    const title = String(form.title || '').trim();
-    const madeWith = String(form.made_with || '').trim();
     if ((title || madeWith) && !store.activeWork(id)) {
       const m = await library.readManifest(id);
       const r = m.resources.find((x) => x.id === resource.id);
@@ -420,7 +428,72 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
       if (madeWith) resource.made_with = madeWith;
     }
     bus.emit('topic.updated', { topic_id: id });
+    return resource;
+  }
+
+  app.post('/topics/:id/resources', async (c) => {
+    const id = c.req.param('id');
+    if (!(await library.exists(id))) throw notFound('Topic');
+    const form = await c.req.parseBody();
+    const file = form.file;
+    if (!(file instanceof File)) throw badRequest('Attach the file as "file".');
+    if (file.size > MAX_UPLOAD) throw new HttpError(413, 'too_large', 'That file is too large.');
+    const data = Buffer.from(await file.arrayBuffer());
+    const resource = await addResource(
+      id,
+      file.name,
+      (dest) => writeFileSync(dest, data),
+      String(form.title || '').trim(),
+      String(form.made_with || '').trim(),
+    );
     return c.json(resource, 201);
+  });
+
+  /**
+   * Big files go up in pieces, each small enough for a proxy's body limit (Cloudflare allows 100 MB on its
+   * free plan). The pieces are sent in order and appended to a part file under `_studyo/uploads/`; the last
+   * one finishes the upload like the single-request route does. A piece that was already appended (its reply
+   * was lost) is accepted again, so a retry is safe.
+   */
+  const UPLOADS = join(config.stateDir, 'uploads');
+  mkdirSync(UPLOADS, { recursive: true });
+  for (const f of readdirSync(UPLOADS)) {
+    const p = join(UPLOADS, f);
+    if (Date.now() - statSync(p).mtimeMs > 24 * 3600_000) rmSync(p, { force: true });
+  }
+  app.post('/topics/:id/resources/chunks', async (c) => {
+    const id = c.req.param('id');
+    if (!(await library.exists(id))) throw notFound('Topic');
+    const q = c.req.query();
+    const uploadId = q.upload_id ?? '';
+    const name = q.name ?? '';
+    const offset = Number(q.offset);
+    const total = Number(q.total);
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(uploadId) || !name || !(offset >= 0) || !(total > 0))
+      throw badRequest('upload_id, name, offset and total are required.');
+    if (total > MAX_UPLOAD) throw new HttpError(413, 'too_large', 'That file is too large.');
+    const chunk = Buffer.from(await c.req.arrayBuffer());
+    if (!chunk.length || offset + chunk.length > total)
+      throw badRequest('That piece does not fit.');
+    const part = join(UPLOADS, `${uploadId}.part`);
+    const have = existsSync(part) ? statSync(part).size : 0;
+    if (have === offset) appendFileSync(part, chunk);
+    else if (have !== offset + chunk.length)
+      throw conflict(`Expected the piece at byte ${have}, got ${offset}.`);
+    if (offset + chunk.length < total) return c.json({ received: offset + chunk.length });
+    try {
+      const resource = await addResource(
+        id,
+        name,
+        (dest) => renameSync(part, dest),
+        String(q.title ?? '').trim(),
+        String(q.made_with ?? '').trim(),
+      );
+      return c.json(resource, 201);
+    } catch (e) {
+      rmSync(part, { force: true });
+      throw e;
+    }
   });
 
   app.get('/topics/:id/resources/:rid/rendered', async (c) => {

@@ -143,6 +143,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topics/{topic_id}/resources/chunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a large file in pieces
+         * @description For files too big for one request (a proxy such as Cloudflare caps a request body at 100 MB on its free
+         *     plan). Send the pieces in order as the raw request body (`application/octet-stream`), about 16 MB each,
+         *     with the same `upload_id` and `name`, the `offset` of the piece's first byte and the file's `total` size.
+         *     Pieces are appended in order. A piece the server already has is accepted again, so a failed request can
+         *     be retried. The reply to the last piece is the new resource, as for `POST /topics/{topic_id}/resources`;
+         *     earlier pieces get the bytes received so far.
+         */
+        post: operations["addResourceChunk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topics/{topic_id}/resources/{resource_id}/rendered": {
         parameters: {
             query?: never;
@@ -1924,6 +1951,56 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    addResourceChunk: {
+        parameters: {
+            query: {
+                upload_id: string;
+                /** @description The file name */
+                name: string;
+                offset: number;
+                total: number;
+                title?: string;
+                made_with?: string;
+            };
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Piece stored, more to come */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Bytes stored so far */
+                        received: number;
+                    };
+                };
+            };
+            /** @description The last piece arrived and the resource was added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Resource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getRendered: {

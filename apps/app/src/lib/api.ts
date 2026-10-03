@@ -142,10 +142,11 @@ export const api = {
     request<Topic>('PATCH', `/topics/${enc(id)}`, body),
   upload: (
     id: string,
-    form: FormData,
+    picked: { form: FormData; blob?: Blob },
+    madeWith: string,
     onProgress?: (p: UploadProgress) => void,
     signal?: AbortSignal,
-  ) => upload<Resource>(`/topics/${enc(id)}/resources`, form, onProgress, signal),
+  ) => uploadResource(id, picked, madeWith, onProgress, signal),
   rendered: (id: string, rid: string) =>
     request<Rendered>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/rendered`),
   addBookmark: (id: string, body: { resource_id: string; position: number; note?: string }) =>
@@ -323,15 +324,17 @@ export interface UploadProgress {
  */
 export function upload<T>(
   path: string,
-  form: FormData,
+  form: FormData | Blob,
   onProgress?: (p: UploadProgress) => void,
   signal?: AbortSignal,
+  contentType?: string,
 ): Promise<T> {
   const c = conn();
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${c.url}${path}`);
     for (const [k, v] of Object.entries(authHeaders(c))) xhr.setRequestHeader(k, v);
+    if (contentType) xhr.setRequestHeader('Content-Type', contentType);
     const started = Date.now();
     xhr.upload.onprogress = (e) => {
       const secs = Math.max(0.25, (Date.now() - started) / 1000);
@@ -368,4 +371,68 @@ export function upload<T>(
     signal?.addEventListener('abort', () => xhr.abort());
     xhr.send(form as unknown as XMLHttpRequestBodyInit);
   });
+}
+
+/** Each piece of a big upload. Well under the 100 MB a Cloudflare request may carry. */
+const CHUNK = 16 * 1024 * 1024;
+
+/**
+ * Add audio, video or a document to a topic. Big files go up in pieces, one request each, so no single request
+ * hits a proxy's body limit; a piece that fails on the network is sent again (up to three tries). Where the file
+ * can't be cut up (native), or it is small, it is one request.
+ */
+export async function uploadResource(
+  id: string,
+  picked: { form: FormData; blob?: Blob },
+  madeWith: string,
+  onProgress?: (p: UploadProgress) => void,
+  signal?: AbortSignal,
+): Promise<Resource> {
+  const blob = picked.blob;
+  if (!blob || blob.size <= CHUNK) {
+    picked.form.append('made_with', madeWith);
+    return upload<Resource>(`/topics/${enc(id)}/resources`, picked.form, onProgress, signal);
+  }
+  const name = (picked.form.get('file') as File | null)?.name ?? 'file';
+  const uploadId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
+  const started = Date.now();
+  let result: Resource | null = null;
+  for (let offset = 0; offset < blob.size; offset += CHUNK) {
+    const piece = blob.slice(offset, offset + CHUNK);
+    const query = new URLSearchParams({
+      upload_id: uploadId,
+      name,
+      offset: String(offset),
+      total: String(blob.size),
+    });
+    if (madeWith) query.set('made_with', madeWith);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const reply = await upload<Resource | { received: number }>(
+          `/topics/${enc(id)}/resources/chunks?${query}`,
+          piece,
+          (p) =>
+            onProgress?.({
+              sent: offset + p.sent,
+              total: blob.size,
+              rate: (offset + p.sent) / Math.max(0.25, (Date.now() - started) / 1000),
+            }),
+          signal,
+          'application/octet-stream',
+        );
+        if ('id' in reply) result = reply;
+        break;
+      } catch (e) {
+        const retry =
+          e instanceof ApiError && (e.status === 0 || e.status >= 500) && e.code !== 'aborted';
+        if (!retry || attempt >= 3) throw e;
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+  if (!result)
+    throw new ApiError(500, 'upload_failed', 'The upload finished but nothing was added.');
+  return result;
 }
