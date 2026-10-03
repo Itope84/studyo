@@ -33,6 +33,7 @@ export function startPrompt(
     '',
     'Parameters:',
     `- topic_path: ${topicPath}`,
+    `  (inside the current working directory, the library root, as topics/${topic.id}; use exactly this folder)`,
   ];
   if (kind === 'answer') {
     lines.push('- interactive: false');

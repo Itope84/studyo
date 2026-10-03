@@ -56,7 +56,7 @@ export function render(markdown: string, opts: RenderOptions): RenderResult {
 ${meta}
 ${body.bodyHtml}
 </main>
-<script>window.STUDYO = ${JSON.stringify({ headings: body.headings, mermaid: body.usesMermaid ? `${opts.assetsHref}/mermaid.min.js` : null, version: RENDERER_VERSION })};</script>
+<script>window.STUDYO = ${JSON.stringify({ headings: body.headings, mermaid: body.usesMermaid ? `${opts.assetsHref}/mermaid.min.js` : null, version: RENDERER_VERSION }).replace(/</g, '\\u003c')};</script>
 <script>${READER_SCRIPT}</script>
 </body>
 </html>

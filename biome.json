@@ -9,10 +9,28 @@
       "!fixtures",
       "!skills",
       "!**/.expo",
-      "!**/*.gen.ts"
+      "!**/*.gen.ts",
+      "!**/expo-env.d.ts",
+      "!**/public",
+      "!**/test-results",
+      "!**/playwright-report"
     ]
   },
-  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
-  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
-  "linter": { "enabled": true, "rules": { "preset": "none" } }
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "none"
+    }
+  }
 }

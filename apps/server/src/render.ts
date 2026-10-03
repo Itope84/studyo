@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Rendered, Resource } from '@studyo/api';
 import { isStale, RENDERER_VERSION, RenderError, renderFile } from '@studyo/renderer';
@@ -14,9 +14,10 @@ export function ensureRendered(library: Library, topicId: string, resource: Reso
   }
   const md = join(library.topicDir(topicId), resource.path);
   const html = md.replace(/\.md$/, '.html');
+  let headings: Rendered['headings'] | null = null;
   if (isStale(md, html, mtime)) {
     try {
-      renderFile(md, library.root);
+      headings = renderFile(md, library.root).headings;
     } catch (e) {
       const message = e instanceof RenderError ? e.message : (e as Error).message;
       throw new HttpError(422, 'render_failed', `This document could not be rendered: ${message}`);
@@ -25,7 +26,19 @@ export function ensureRendered(library: Library, topicId: string, resource: Reso
   return {
     html_path: relative(library.root, html).split('\\').join('/'),
     renderer_version: RENDERER_VERSION,
+    headings: headings ?? headingsFromHtml(html),
   };
+}
+
+/** The outline the renderer embedded in the page (`window.STUDYO = {headings: …}`). */
+function headingsFromHtml(htmlPath: string): Rendered['headings'] {
+  const text = readFileSync(htmlPath, 'utf8');
+  const m = /<script>window\.STUDYO = (\{.*?\});<\/script>/s.exec(text);
+  try {
+    return m ? (JSON.parse(m[1] as string).headings ?? []) : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Render every document in a topic; returns the problems instead of throwing. */

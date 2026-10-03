@@ -605,6 +605,12 @@ export interface components {
             /** @description Relative to the library root */
             html_path: string;
             renderer_version: string;
+            /** @description The document outline. Ids are stable anchors for reading position, chat links and condense scope. */
+            headings: {
+                id: string;
+                depth: number;
+                text: string;
+            }[];
         };
         ProgressItem: {
             /** @description Seconds for audio and video; a 0–1 fraction of the page for documents */

@@ -94,6 +94,12 @@ export function opencodeAdapter(bin = process.env.STUDYO_OPENCODE_BIN ?? 'openco
           };
           switch (msg.type) {
             case 'tool_use':
+              if (part.tool && part.state?.status === 'error') {
+                onEvent({
+                  type: 'stderr',
+                  text: `Tool ${part.tool} failed: ${String(part.state.error ?? '').slice(0, 300)}`,
+                });
+              }
               if (part.tool) {
                 onEvent({
                   type: 'tool',

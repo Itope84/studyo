@@ -84,6 +84,20 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
                 onEvent({ type: 'text', text: block.text });
               }
             }
+          } else if (type === 'user') {
+            // Tool results come back as user messages; surface the failures in the job log.
+            const content = ((msg.message as { content?: unknown })?.content ?? []) as Array<{
+              type?: string;
+              is_error?: boolean;
+              content?: unknown;
+            }>;
+            if (!Array.isArray(content)) return;
+            for (const block of content) {
+              if (block.type === 'tool_result' && block.is_error) {
+                const text = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
+                onEvent({ type: 'stderr', text: `Tool failed: ${text.slice(0, 300)}` });
+              }
+            }
           } else if (type === 'stream_event') {
             if (msg.parent_tool_use_id) return;
             const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };

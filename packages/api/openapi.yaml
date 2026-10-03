@@ -918,10 +918,20 @@ components:
 
     Rendered:
       type: object
-      required: [html_path, renderer_version]
+      required: [html_path, renderer_version, headings]
       properties:
         html_path: { type: string, description: Relative to the library root }
         renderer_version: { type: string }
+        headings:
+          type: array
+          description: The document outline. Ids are stable anchors for reading position, chat links and condense scope.
+          items:
+            type: object
+            required: [id, depth, text]
+            properties:
+              id: { type: string }
+              depth: { type: integer, minimum: 1, maximum: 6 }
+              text: { type: string }
 
     ProgressItem:
       type: object

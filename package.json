@@ -10,7 +10,10 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "e2e": "playwright test",
+    "dev:server": "pnpm --filter @studyo/server dev",
+    "dev:app": "pnpm --filter @studyo/app web"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
