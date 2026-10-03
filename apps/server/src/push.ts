@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PushSubscription, Topic } from '@studyo/api';
+import { courseIdOf, isCourseScope } from '@studyo/api';
 import webpush from 'web-push';
 import type { Db } from './db.ts';
 import type { JobRecord } from './jobs/store.ts';
@@ -47,15 +48,22 @@ export class Push {
   }
 
   async notifyJob(job: JobRecord, topic: Topic | null) {
-    if (job.kind === 'answer') return;
-    const name = topic?.title ?? 'your topic';
+    if (job.kind === 'answer' || job.kind === 'quiz-grade') return;
+    const name = topic?.title ?? (isCourseScope(job.topic_id) ? 'your course' : 'your topic');
     let title: string;
     let body: string;
     if (job.status === 'needs_input') {
       title = 'Studyo has a question';
       body = `Before building "${name}": ${job.questions?.title ?? 'a quick question about what you know.'}`;
     } else if (job.status === 'succeeded') {
-      title = job.kind === 'condense' ? 'Condensed doc ready' : 'Study pack ready';
+      title =
+        {
+          condense: 'Condensed doc ready',
+          'course-outline': 'Course outline ready',
+          quiz: 'Quiz ready',
+          assignment: 'Take-home ready',
+          'assignment-review': 'Review ready',
+        }[job.kind as string] ?? 'Study pack ready';
       body = name;
     } else if (job.status === 'failed') {
       title = 'A job failed';
@@ -64,7 +72,7 @@ export class Push {
     await this.send({
       title,
       body,
-      url: `/topic/${job.topic_id}${job.status === 'needs_input' ? `?job=${job.id}` : ''}`,
+      url: `${isCourseScope(job.topic_id) ? `/course/${courseIdOf(job.topic_id)}` : `/topic/${job.topic_id}`}${job.status === 'needs_input' ? `?job=${job.id}` : ''}`,
       tag: job.id,
     });
   }

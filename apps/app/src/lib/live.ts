@@ -1,4 +1,4 @@
-import type { StudyoEvent } from '@studyo/api';
+import { courseIdOf, isCourseScope, type StudyoEvent } from '@studyo/api';
 import { fetch as expoFetch } from 'expo/fetch';
 import { AppState, Platform } from 'react-native';
 import { create } from 'zustand';
@@ -150,9 +150,7 @@ class EventStream {
       case 'job.updated': {
         const job = e.data.job;
         applyJob(job);
-        if (job.status !== 'running' || job.lane === 'work') {
-          void queryClient.invalidateQueries({ queryKey: keys.topic(job.topic_id) });
-        }
+        if (job.status !== 'running' || job.lane === 'work') invalidateScope(job.topic_id, false);
         if (job.status !== 'running') void queryClient.invalidateQueries({ queryKey: keys.topics });
         break;
       }
@@ -166,8 +164,7 @@ class EventStream {
         upsertChatMessage(e.data.topic_id, e.data.message);
         break;
       case 'topic.updated':
-        void queryClient.invalidateQueries({ queryKey: keys.topic(e.data.topic_id) });
-        void queryClient.invalidateQueries({ queryKey: keys.topics });
+        invalidateScope(e.data.topic_id);
         break;
       case 'topic.removed':
         void queryClient.invalidateQueries({ queryKey: keys.topics });
@@ -205,4 +202,21 @@ export function watchForeground(): () => void {
     if (s === 'active') events.resume();
   });
   return () => sub.remove();
+}
+
+/**
+ * A topic, chapter or course changed: refresh what shows it. A course scope id (`course--x`) refreshes that
+ * course; any other id may be a chapter, so the course lists refresh too.
+ */
+function invalidateScope(id: string, topics = true) {
+  const course = isCourseScope(id);
+  if (course) void queryClient.invalidateQueries({ queryKey: keys.course(courseIdOf(id)) });
+  else void queryClient.invalidateQueries({ queryKey: keys.topic(id) });
+  void queryClient.invalidateQueries({ queryKey: keys.courses });
+  void queryClient.invalidateQueries({ queryKey: ['course'] });
+  void queryClient.invalidateQueries({ queryKey: keys.quizzes(id) });
+  void queryClient.invalidateQueries({ queryKey: ['quiz', id] });
+  void queryClient.invalidateQueries({ queryKey: keys.assignments(id) });
+  void queryClient.invalidateQueries({ queryKey: ['assignment', id] });
+  if (topics) void queryClient.invalidateQueries({ queryKey: keys.topics });
 }

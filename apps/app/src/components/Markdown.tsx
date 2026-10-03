@@ -6,7 +6,7 @@ import { MathText } from './MathText';
 import { Icon } from './ui';
 
 const INLINE =
-  /(\*\*[^*]+\*\*|`[^`]+`|\$(?=\S)[^$\n]*?[^\s\\]\$(?!\d)|\[[^\]]+\]\([^)\s]+\)|\[S\d+[^\]]*\](?!\()|\(pack:\s*#[\w-]+\)|\*[^*\s][^*]*\*|\b_[^_\s][^_]*_\b)/g;
+  /(\*\*[^*]+\*\*|`[^`]+`|\$(?=\S)[^$\n]*?[^\s\\]\$(?!\d)|\[[^\]]+\]\([^)\s]+\)|\[S\d+[^\]]*\](?!\()|\(pack:\s*#[\w-]+\)|\(chapter:\s*[\w-]+\)|\*[^*\s][^*]*\*|\b_[^_\s][^_]*_\b)/g;
 
 /** Chat text uses the apparatus face (Geist), not the reading serif. */
 const body = { fontFamily: fonts.ui, fontSize: 15.5, lineHeight: 24 } as const;
@@ -74,6 +74,19 @@ export function Markdown({
         );
       } else if (tok.startsWith('$')) {
         out.push(<MathText key={k} tex={tok.slice(1, -1)} color={color} />);
+      } else if (tok.startsWith('(chapter:')) {
+        const chapter = tok.replace(/^\(chapter:\s*/, '').replace(/\)$/, '');
+        out.push(
+          <Text
+            key={k}
+            style={{ fontFamily: fonts.uiMedium, fontSize: 13, color: c.primaryInk }}
+            onPress={() => router.push(`/topic/${chapter}`)}
+            accessibilityRole="link"
+          >
+            {' '}
+            ↗ chapter
+          </Text>,
+        );
       } else if (tok.startsWith('(pack:')) {
         const section = tok.replace(/^\(pack:\s*#/, '').replace(/\)$/, '');
         out.push(

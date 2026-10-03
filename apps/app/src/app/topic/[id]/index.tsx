@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Platform, Pressable, View } from 'react-native';
+import { ChapterBanner } from '@/components/ChapterBanner';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
@@ -171,8 +172,9 @@ export default function TopicScreen() {
             {topic.summary}
           </T>
         ) : null}
-        <OriginLine topic={topic} />
+        {topic.course ? null : <OriginLine topic={topic} />}
       </View>
+      {topic.course ? <ChapterBanner topic={topic} online={online} /> : null}
 
       {activeJob ? <JobPanel job={activeJob} online={online} /> : null}
       {lastFailed && topic.status !== 'ready' ? (
@@ -247,6 +249,22 @@ export default function TopicScreen() {
             icon="forum"
             onPress={() => router.push(`/topic/${id}/chat`)}
           />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Button
+              kind="secondary"
+              label="Quiz me"
+              icon="quiz"
+              onPress={() => router.push(`/topic/${id}/quizzes`)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              kind="secondary"
+              label="Take-home"
+              icon="assignment"
+              onPress={() => router.push(`/topic/${id}/assignments`)}
+              style={{ flex: 1 }}
+            />
+          </View>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Button
               kind="secondary"

@@ -31,6 +31,13 @@ You answer from the topic's own material. You do not answer from your own knowle
    `[studyo:suggest-enrich] <one-line focus>`
    The app can turn this into a button. Do not start enrichment yourself. If the question is partly outside the topic itself, say so and suggest a new topic instead.
 
+## Courses
+
+Two more scopes. (The chat skill is due a rework, see `docs/plan.md` slice 8; this is the minimum so course chat works today.)
+
+- **Chapter chat** (`topic_path` is a chapter, `course_path` is given): answer from the chapter first. If the question is about something an earlier chapter teaches (`topic.json → course.prereqs`, `course.teaches`), find it in `topics/<that chapter id>/pack/pack.md` and say which chapter it came from. Link it as `(chapter: <chapter id>)`.
+- **Course chat** (`course_path` only, no chapter): read `index.md` first. Open only the chapters it points to, under `topics/<chapter id>/`, and their packs and condensed docs. Never read every chapter. Answer cross-chapter questions by naming the chapters involved. Chapters with no pack yet: say which chapters are not built and offer to build them (end with `[studyo:suggest-enrich] build chapter <title>`).
+
 ## Limits
 
 - Read-only. Do not write, edit or delete anything. The server saves the chat transcript.

@@ -6,13 +6,15 @@ The numbers below are cost ceilings, a safety net against runaway runs. They are
 
 A **search** is one query. An **open** is one page or PDF fetched and read in full, not a search snippet.
 
-| | `enrich-document` | `enrich-topic` | `enrich-deep` |
-| --- | --- | --- | --- |
-| Searches | 15 | 20 | 40 |
-| Opens (the original excluded) | 15 | 20 | 40 |
-| Subagents | none | none | up to 3 in parallel, only if the CLI supports them |
-| Quote and figure verification | every direct quote | every direct quote | every direct quote, figure and date |
-| Counter-review pass | no | no | yes |
+| | `enrich-document` | `enrich-topic` | `enrich-deep` | `course-plan` |
+| --- | --- | --- | --- | --- |
+| Searches | 15 | 20 | 40 | 15 |
+| Opens (the original excluded) | 15 | 20 | 40 | 12 (contents pages, not whole sources) |
+| Subagents | none | none | up to 3 in parallel, only if the CLI supports them | none |
+| Quote and figure verification | every direct quote | every direct quote | every direct quote, figure and date | n/a |
+| Counter-review pass | no | no | yes | no |
+
+`enrich-chapter` uses the `enrich-document` column. `course-outline` has no search ceiling: it reads contents pages and a few boundary pages only. `quiz`, `quiz-grade`, `assignment` and `assignment-review` read the pack and do no research.
 
 `enrich-topic` extra: one anchor source in full, plus other primary sources as excerpts where they help.
 

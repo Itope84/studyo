@@ -38,6 +38,77 @@ export function useTopics() {
   });
 }
 
+export function useCourses() {
+  return useQuery({
+    queryKey: keys.courses,
+    queryFn: () => track(api.courses()),
+    enabled: useConnected(),
+  });
+}
+
+export function useCourse(id: string) {
+  return useQuery({
+    queryKey: keys.course(id),
+    queryFn: () => track(api.course(id)),
+    enabled: useConnected() && !!id,
+  });
+}
+
+export function useQuizzes(scope: string) {
+  return useQuery({
+    queryKey: keys.quizzes(scope),
+    queryFn: () => track(api.quizzes(scope)),
+    enabled: useConnected() && !!scope,
+    // A quiz being written or graded shows up without waiting for the stream.
+    refetchInterval: (q) =>
+      q.state.data?.quizzes.some(
+        (z) => z.status === 'generating' || z.attempts.some((a) => a.status === 'grading'),
+      )
+        ? 5_000
+        : false,
+  });
+}
+
+export function useQuiz(scope: string, id: string) {
+  return useQuery({
+    queryKey: keys.quiz(scope, id),
+    queryFn: () => track(api.quiz(scope, id)),
+    enabled: useConnected() && !!id && !!scope,
+    refetchInterval: (q) =>
+      q.state.data?.status === 'generating' ||
+      q.state.data?.attempts.some((a) => a.status === 'grading')
+        ? 4_000
+        : false,
+  });
+}
+
+export function useAssignments(topic: string) {
+  return useQuery({
+    queryKey: keys.assignments(topic),
+    queryFn: () => track(api.assignments(topic)),
+    enabled: useConnected() && !!topic,
+    refetchInterval: (q) =>
+      q.state.data?.assignments.some(
+        (a) => a.status === 'briefing' || a.submissions.some((s) => s.status === 'reviewing'),
+      )
+        ? 5_000
+        : false,
+  });
+}
+
+export function useAssignment(topic: string, id: string) {
+  return useQuery({
+    queryKey: keys.assignment(topic, id),
+    queryFn: () => track(api.assignment(topic, id)),
+    enabled: useConnected() && !!id && !!topic,
+    refetchInterval: (q) =>
+      q.state.data?.status === 'briefing' ||
+      q.state.data?.submissions.some((s) => s.status === 'reviewing')
+        ? 4_000
+        : false,
+  });
+}
+
 export function useTopic(id: string) {
   return useQuery({
     queryKey: keys.topic(id),

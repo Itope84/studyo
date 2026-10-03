@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] review: starting"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "assignments/{{params.assignment_id}}/reviews/{{params.submission_id}}.json",
+        "content": "{\n  \"summary\": \"Valid proofs pass. Tampering is not checked yet.\",\n  \"criteria\": [\n    {\n      \"id\": \"a1\",\n      \"met\": \"yes\",\n      \"feedback\": \"Works on the sample.\"\n    },\n    {\n      \"id\": \"a2\",\n      \"met\": \"no\",\n      \"feedback\": \"No test for a changed sibling.\"\n    }\n  ],\n  \"next_steps\": [\n    \"Add a tampered-proof test\"\n  ],\n  \"pointers\": [\n    {\n      \"label\": \"Inclusion proofs\",\n      \"section\": null\n    }\n  ]\n}"
+      }
+    },
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] review: 1 met, 0 partly, 1 not met"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.02
+      }
+    }
+  ]
+}

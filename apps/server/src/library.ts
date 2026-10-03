@@ -2,7 +2,9 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import type {
+  ChapterRef,
   ContinueItem,
+  Course,
   Job,
   Progress,
   Resource,
@@ -11,6 +13,7 @@ import type {
   TopicStatus,
   TopicSummary,
 } from '@studyo/api';
+import { courseIdOf, isCourseScope } from '@studyo/api';
 import { docInfo } from '@studyo/renderer';
 import { parseFile } from 'music-metadata';
 import { HttpError, notFound, nowIso, readJson, slugify, today, writeJsonAtomic } from './util.ts';
@@ -58,9 +61,36 @@ export class Library {
     return join(this.root, 'inbox');
   }
 
+  get coursesDir() {
+    return join(this.root, 'courses');
+  }
+
+  /** The folder behind a topic id, or behind a course scope id (`course--<id>`), which jobs and chat use. */
   topicDir(id: string): string {
     if (!TOPIC_ID.test(id)) throw notFound('Topic');
+    if (isCourseScope(id)) return this.courseDir(courseIdOf(id));
     return join(this.topicsDir, id);
+  }
+
+  courseDir(id: string): string {
+    if (!TOPIC_ID.test(id)) throw notFound('Course');
+    return join(this.coursesDir, id);
+  }
+
+  async courseIds(): Promise<string[]> {
+    const entries = await readdir(this.coursesDir, { withFileTypes: true }).catch(() => []);
+    return entries
+      .filter(
+        (e) =>
+          e.isDirectory() &&
+          TOPIC_ID.test(e.name) &&
+          existsSync(join(this.coursesDir, e.name, 'course.json')),
+      )
+      .map((e) => e.name);
+  }
+
+  courseExists(id: string): boolean {
+    return TOPIC_ID.test(id) && existsSync(join(this.coursesDir, id, 'course.json'));
   }
 
   async topicIds(): Promise<string[]> {
@@ -78,7 +108,9 @@ export class Library {
     return ids;
   }
 
+  /** A topic, or a course when given a course scope id. */
   async exists(id: string): Promise<boolean> {
+    if (isCourseScope(id)) return this.courseExists(courseIdOf(id));
     return existsSync(join(this.topicDir(id), 'topic.json'));
   }
 
@@ -135,7 +167,13 @@ export class Library {
     const packInfo = resources.find((r) => r.type === 'pack')?.description ?? null;
     const summary =
       typeof manifest.summary === 'string' && manifest.summary.trim() ? manifest.summary : packInfo;
-    return { ...manifest, summary, cover_path: await findCover(dir), resources };
+    return {
+      ...manifest,
+      summary,
+      course: manifest.course ?? null,
+      cover_path: await findCover(dir),
+      resources,
+    };
   }
 
   async readProgress(id: string): Promise<Progress> {
@@ -151,10 +189,15 @@ export class Library {
     title: string;
     origin: Manifest['origin'];
     slugHint: string;
+    /** A chapter creates its folder under its own id, which is already unique. */
+    exactId?: string;
+    course?: ChapterRef;
   }): Promise<Manifest> {
-    let id = slugify(input.slugHint);
-    for (let n = 2; existsSync(join(this.topicsDir, id)); n++)
-      id = `${slugify(input.slugHint, 44)}-${n}`;
+    let id = input.exactId ?? slugify(input.slugHint);
+    if (!input.exactId) {
+      for (let n = 2; existsSync(join(this.topicsDir, id)) || isCourseScope(id); n++)
+        id = `${slugify(input.slugHint, 44)}-${n}`;
+    }
     const dir = this.topicDir(id);
     for (const sub of ['sources', 'pack', 'outputs', 'chat'])
       mkdirSync(join(dir, sub), { recursive: true });
@@ -165,6 +208,7 @@ export class Library {
       status: 'captured',
       origin: input.origin,
       session_id: null,
+      ...(input.course ? { course: input.course } : {}),
       resources: [],
       created: now,
       updated: now,
@@ -218,6 +262,7 @@ export function summarise(topic: Topic, progress: Progress, activeJob: Job | nul
   const trackable = count(['pack', 'condensed', 'audio', 'video']);
   return {
     id: topic.id,
+    course_id: topic.course?.course_id ?? null,
     title: topic.title,
     status: topic.status,
     origin: topic.origin,

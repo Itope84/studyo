@@ -1,0 +1,43 @@
+{
+  "steps": [
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] quiz: 3 questions"
+      }
+    },
+    {
+      "delay": 150,
+      "event": {
+        "type": "tool",
+        "name": "Read",
+        "summary": "Opening pack/pack.md"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "quizzes/{{params.quiz_id}}.json",
+        "content": "{\n  \"id\": \"{{params.quiz_id}}\",\n  \"title\": \"Replay quiz\",\n  \"status\": \"ready\",\n  \"scope\": \"{{params.scope}}\",\n  \"focus\": null,\n  \"created\": \"{{now}}\",\n  \"questions\": [\n    {\n      \"id\": \"q1\",\n      \"type\": \"choice\",\n      \"prompt\": \"What does an inclusion proof need?\",\n      \"options\": [\n        {\n          \"id\": \"a\",\n          \"label\": \"The whole log\"\n        },\n        {\n          \"id\": \"b\",\n          \"label\": \"Sibling hashes along the path\"\n        },\n        {\n          \"id\": \"c\",\n          \"label\": \"A new signature\"\n        }\n      ],\n      \"answer\": \"b\",\n      \"explanation\": \"It is the sibling hashes on the path to the root.\",\n      \"concept\": \"inclusion proof\",\n      \"section\": null,\n      \"chapter_id\": null\n    },\n    {\n      \"id\": \"q2\",\n      \"type\": \"short\",\n      \"prompt\": \"Why does the proof grow only logarithmically?\",\n      \"rubric\": \"Mentions tree depth or halving.\",\n      \"explanation\": \"Each level of the tree adds one hash.\",\n      \"concept\": \"proof size\",\n      \"section\": null,\n      \"chapter_id\": null\n    },\n    {\n      \"id\": \"q3\",\n      \"type\": \"explain\",\n      \"prompt\": \"Explain a Merkle tree in your own words.\",\n      \"rubric\": \"Hashes of hashes up to a root.\",\n      \"explanation\": \"A tree where each node is the hash of its children.\",\n      \"concept\": \"merkle tree\",\n      \"section\": null,\n      \"chapter_id\": null\n    }\n  ],\n  \"attempts\": []\n}"
+      }
+    },
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] quiz: 3 questions"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.02
+      }
+    }
+  ]
+}

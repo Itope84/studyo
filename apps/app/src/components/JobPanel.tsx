@@ -13,6 +13,11 @@ export const jobLabel = (job: Job) =>
     'enrich-deep': 'Going deeper',
     condense: 'Writing a condensed doc',
     answer: 'Chat reply',
+    'course-outline': 'Planning your course',
+    quiz: 'Writing a quiz',
+    'quiz-grade': 'Grading your answers',
+    assignment: 'Writing a take-home',
+    'assignment-review': 'Reviewing your work',
   })[job.kind];
 
 /** What the AI is doing on this topic right now, with the one action that matters. */

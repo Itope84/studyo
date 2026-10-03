@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Check, Input, Segmented } from '@/components/inputs';
@@ -14,7 +14,10 @@ type Mode = 'link' | 'pdf' | 'topic';
 /** Three ways in: a link, a PDF, or just a name. */
 export default function Add() {
   const { c } = useTheme();
-  const [mode, setMode] = useState<Mode>('link');
+  const { kind } = useLocalSearchParams<{ kind?: string }>();
+  const course = kind === 'course';
+  const [goal, setGoal] = useState('');
+  const [mode, setMode] = useState<Mode>(course ? 'pdf' : 'link');
   const [link, setLink] = useState('');
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
@@ -37,6 +40,27 @@ export default function Add() {
     setBusy(true);
     setError(null);
     try {
+      if (course) {
+        let made;
+        if (mode === 'pdf' && pdf) {
+          if (title.trim()) pdf.form.set('title', title.trim());
+          if (goal.trim()) pdf.form.set('goal', goal.trim());
+          made = await api.createCourseFromPdf(pdf.form);
+        } else {
+          made = await api.createCourse({
+            origin:
+              mode === 'link'
+                ? { type: 'link', link: link.trim() }
+                : { type: 'topic', name: name.trim() },
+            title: title.trim() || undefined,
+            goal: goal.trim() || undefined,
+          });
+        }
+        await queryClient.invalidateQueries({ queryKey: keys.courses });
+        await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
+        router.replace(`/course/${made.course.id}`);
+        return;
+      }
       let result;
       if (mode === 'pdf' && pdf) {
         if (title.trim()) pdf.form.set('title', title.trim());
@@ -66,12 +90,15 @@ export default function Add() {
   };
 
   return (
-    <Screen header={<Header title="Add topic" />}>
+    <Screen header={<Header title={course ? 'Add course' : 'Add topic'} />}>
       <View style={{ paddingTop: space.lg, gap: space.sm, marginBottom: space.lg }}>
-        <T variant="display">What do you want to learn?</T>
+        <T variant="display">
+          {course ? 'What do you want to study?' : 'What do you want to learn?'}
+        </T>
         <T variant="body" tone="lead">
-          The server keeps the original, finds the background you need from real sources, and links
-          every addition to where it came from.
+          {course
+            ? 'A book, a long document or a whole subject. The server finds the chapters without reading everything, you approve the outline, and chapters are built as you go.'
+            : 'The server keeps the original, finds the background you need from real sources, and links every addition to where it came from.'}
         </T>
       </View>
 
@@ -83,8 +110,8 @@ export default function Add() {
         }}
         options={[
           { value: 'link', label: 'Link' },
-          { value: 'pdf', label: 'PDF' },
-          { value: 'topic', label: 'Topic name' },
+          { value: 'pdf', label: course ? 'Book (PDF)' : 'PDF' },
+          { value: 'topic', label: course ? 'Subject' : 'Topic name' },
         ]}
       />
 
@@ -105,13 +132,19 @@ export default function Add() {
         ) : null}
         {mode === 'topic' ? (
           <Field
-            label="Topic"
-            hint="The AI finds primary sources first, then builds the pack from them. You can check what it chose."
+            label={course ? 'Subject' : 'Topic'}
+            hint={
+              course
+                ? 'No source? The AI looks for a syllabus or standard textbook to follow and shows you the outline first.'
+                : 'The AI finds primary sources first, then builds the pack from them. You can check what it chose.'
+            }
           >
             <Input
               value={name}
               onChangeText={setName}
-              placeholder="For example: Raft consensus"
+              placeholder={
+                course ? 'For example: Distributed systems' : 'For example: Raft consensus'
+              }
               autoFocus
               accessibilityLabel="Topic"
             />
@@ -137,7 +170,9 @@ export default function Add() {
                 </View>
               ) : (
                 <T variant="meta" tone="lead">
-                  A paper, a chapter or a whitepaper.
+                  {course
+                    ? 'A book with selectable text. Scanned PDFs are not supported yet.'
+                    : 'A paper, a chapter or a whitepaper.'}
                 </T>
               )}
               <Button
@@ -157,23 +192,44 @@ export default function Add() {
             accessibilityLabel="Title"
           />
         </Field>
-        <Check
-          checked={enrich}
-          onToggle={() => setEnrich((v) => !v)}
-          label="Build the study pack now"
-          note={
-            enrich
-              ? `Runs on your server with ${cli?.label ?? 'the selected CLI'}. It may ask one quick question about what you already know.`
-              : 'Saves the topic. Build the pack later from the topic page.'
-          }
-        />
+        {course ? (
+          <Field
+            label="Your goal (optional)"
+            hint="What you want to be able to do afterwards. It shapes the outline and what gets emphasised."
+          >
+            <Input
+              value={goal}
+              onChangeText={setGoal}
+              multiline
+              area
+              placeholder="For example: design the storage layer of a service I'm building"
+              accessibilityLabel="Goal"
+            />
+          </Field>
+        ) : (
+          <Check
+            checked={enrich}
+            onToggle={() => setEnrich((v) => !v)}
+            label="Build the study pack now"
+            note={
+              enrich
+                ? `Runs on your server with ${cli?.label ?? 'the selected CLI'}. It may ask one quick question about what you already know.`
+                : 'Saves the topic. Build the pack later from the topic page.'
+            }
+          />
+        )}
       </View>
 
       {error ? (
-        <Notice tone="danger" icon="error-outline" title="Couldn't add the topic" body={error} />
+        <Notice
+          tone="danger"
+          icon="error-outline"
+          title={course ? "Couldn't add the course" : "Couldn't add the topic"}
+          body={error}
+        />
       ) : null}
       <Button
-        label={enrich ? 'Add and build' : 'Add topic'}
+        label={course ? 'Plan the course' : enrich ? 'Add and build' : 'Add topic'}
         icon="add"
         onPress={create}
         busy={busy}

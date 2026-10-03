@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] assignment: starting"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "assignments/{{params.assignment_id}}/assignment.json",
+        "content": "{\n  \"id\": \"{{params.assignment_id}}\",\n  \"title\": \"Build a tiny inclusion-proof checker\",\n  \"status\": \"open\",\n  \"failure_reason\": null,\n  \"context\": null,\n  \"brief\": {\n    \"title\": \"Build a tiny inclusion-proof checker\",\n    \"summary\": \"Verify a Merkle inclusion proof.\",\n    \"task\": \"Write a function that checks an inclusion proof for a leaf against a root.\",\n    \"constraints\": [\n      \"No libraries for hashing trees\"\n    ],\n    \"acceptance\": [\n      {\n        \"id\": \"a1\",\n        \"text\": \"Verifies a valid proof\"\n      },\n      {\n        \"id\": \"a2\",\n        \"text\": \"Rejects a tampered proof\"\n      }\n    ],\n    \"stretch\": \"Support consistency proofs.\",\n    \"estimate\": \"1 to 2 hours\",\n    \"grounded_in\": null\n  },\n  \"submissions\": [],\n  \"job_id\": null,\n  \"created\": \"{{now}}\"\n}"
+      }
+    },
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] assignment: ready"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.02
+      }
+    }
+  ]
+}

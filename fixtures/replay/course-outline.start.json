@@ -1,0 +1,64 @@
+{
+  "steps": [
+    {
+      "delay": 150,
+      "event": {
+        "type": "text",
+        "text": "[studyo] 1/6 outline: starting"
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "tool",
+        "name": "Bash",
+        "summary": "Running: pdfinfo sources/S1-replay.pdf"
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text",
+        "text": "[studyo] 2/6 structure: 3 candidate chapters from contents"
+      }
+    },
+    {
+      "delay": 250,
+      "event": {
+        "type": "text",
+        "text": "[studyo] 3/6 chapters: 3 chapters, 2 prerequisite links"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "sources/_work/outline-draft.json",
+        "content": "{\n  \"chapters\": 3\n}"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "_job/questions.json",
+        "content": "{\n  \"id\": \"outline-1\",\n  \"title\": \"Does this outline look right?\",\n  \"intro\": \"1. **Reliable systems** (pp. 3 to 28), needs nothing\\n2. **Replication** (pp. 29 to 60), needs 1\\n3. **Consensus** (pp. 61 to 95), needs 2\\n\\n3 chapters means 3 build runs, and nothing is built until you start a chapter or choose how many to build.\",\n  \"questions\": [\n    {\n      \"id\": \"decision\",\n      \"kind\": \"single\",\n      \"label\": \"Approve the outline?\",\n      \"required\": true,\n      \"options\": [\n        {\n          \"id\": \"approve\",\n          \"label\": \"Looks right\",\n          \"checked\": true\n        },\n        {\n          \"id\": \"change\",\n          \"label\": \"Change it\"\n        }\n      ]\n    },\n    {\n      \"id\": \"change\",\n      \"kind\": \"text\",\n      \"label\": \"What should change?\",\n      \"placeholder\": \"For example: merge 2 and 3\"\n    }\n  ]\n}"
+      }
+    },
+    {
+      "delay": 100,
+      "event": {
+        "type": "text",
+        "text": "[studyo] NEEDS_INPUT"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "[studyo] NEEDS_INPUT",
+        "error": null,
+        "costUsd": 0.01
+      }
+    }
+  ]
+}

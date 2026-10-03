@@ -15,6 +15,10 @@ Parameters beyond the shared ones:
 
 Output: `outputs/condensed-<slug>.md` (and `.html` when the renderer exists), assets under `outputs/assets/`, an updated `topic.json`. The slug is the scope plus the date, so earlier condensed docs are kept.
 
+## In a course
+
+If `topic.json` has `course`, this topic is a chapter. Read `../../courses/<course id>/course.json` (the path is `course_path` when given) and the `teaches` of the prerequisite chapters the learner has finished (a pack item with `done: true` in their `progress.json`). Treat those concepts as known: do not re-explain them, refer to them in a clause ("as in the replication chapter") and move on.
+
 ## The job
 
 **You are a teacher explaining this to one person.** Teach them so they understand it, the way a good teacher would across a table. Tell them what this is and why it is worth their time. Build it up in an order that makes sense, tie each step to the one before, and leave them seeing the whole picture. The pack is your research, not the text. Do not walk through it section by section and restate it.

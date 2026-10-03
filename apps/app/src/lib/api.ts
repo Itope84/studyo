@@ -1,9 +1,21 @@
 import type {
   AnswerSet,
   AssignInbox,
+  Assignment,
+  AssignmentList,
+  AssignmentWithJob,
+  BuildChapters,
   ChatHistory,
   ChatTurn,
+  Course,
+  CourseDetail,
+  CourseList,
+  CourseWithJob,
+  CreateAssignment,
+  CreateCourse,
   CreateJob,
+  CreateQuiz,
+  CreateSubmission,
   CreateTopic,
   InboxItem,
   InboxList,
@@ -14,14 +26,20 @@ import type {
   Profile,
   Progress,
   ProgressUpdate,
+  Quiz,
+  QuizAttempt,
+  QuizList,
+  QuizWithJob,
   Rendered,
   Resource,
   ServerInfo,
   Settings,
+  SubmitAttempt,
   Topic,
   TopicDetail,
   TopicList,
   TopicWithJob,
+  UpdateCourse,
   UpdateTopic,
 } from '@studyo/api';
 import { type Connection, usePrefs } from './prefs';
@@ -158,6 +176,42 @@ export const api = {
   chat: (id: string) => request<ChatHistory>('GET', `/topics/${enc(id)}/chat`),
   send: (id: string, text: string) =>
     request<ChatTurn>('POST', `/topics/${enc(id)}/chat`, { text }),
+
+  courses: (includeArchived = false) =>
+    request<CourseList>('GET', `/courses${includeArchived ? '?include_archived=true' : ''}`),
+  course: (id: string) => request<CourseDetail>('GET', `/courses/${enc(id)}`),
+  createCourse: (body: CreateCourse) => request<CourseWithJob>('POST', '/courses', body),
+  createCourseFromPdf: (form: FormData) => request<CourseWithJob>('POST', '/courses', form),
+  updateCourse: (id: string, body: UpdateCourse) =>
+    request<Course>('PATCH', `/courses/${enc(id)}`, body),
+  redoOutline: (id: string) => request<Job>('POST', `/courses/${enc(id)}/outline`),
+  buildChapters: (id: string, body: BuildChapters) =>
+    request<JobList>('POST', `/courses/${enc(id)}/build`, body),
+  completeChapter: (id: string, chapter: string, done: boolean) =>
+    request<CourseDetail>('POST', `/courses/${enc(id)}/chapters/${enc(chapter)}/complete`, {
+      done,
+    }),
+
+  quizzes: (scope: string) => request<QuizList>('GET', `/topics/${enc(scope)}/quizzes`),
+  quiz: (scope: string, id: string) =>
+    request<Quiz>('GET', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
+  createQuiz: (scope: string, body: CreateQuiz) =>
+    request<QuizWithJob>('POST', `/topics/${enc(scope)}/quizzes`, body),
+  deleteQuiz: (scope: string, id: string) =>
+    request<void>('DELETE', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
+  submitAttempt: (scope: string, id: string, body: SubmitAttempt) =>
+    request<QuizAttempt>('POST', `/topics/${enc(scope)}/quizzes/${enc(id)}/attempts`, body),
+
+  assignments: (topic: string) =>
+    request<AssignmentList>('GET', `/topics/${enc(topic)}/assignments`),
+  assignment: (topic: string, id: string) =>
+    request<Assignment>('GET', `/topics/${enc(topic)}/assignments/${enc(id)}`),
+  createAssignment: (topic: string, body: CreateAssignment | FormData) =>
+    request<AssignmentWithJob>('POST', `/topics/${enc(topic)}/assignments`, body),
+  deleteAssignment: (topic: string, id: string) =>
+    request<void>('DELETE', `/topics/${enc(topic)}/assignments/${enc(id)}`),
+  submitAssignment: (topic: string, id: string, body: CreateSubmission | FormData) =>
+    request<Assignment>('POST', `/topics/${enc(topic)}/assignments/${enc(id)}/submissions`, body),
 
   inbox: () => request<InboxList>('GET', '/inbox'),
   uploadInbox: (form: FormData) => request<InboxItem>('POST', '/inbox', form),

@@ -425,6 +425,258 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All courses, with how far through each and what to study next */
+        get: operations["listCourses"];
+        put?: never;
+        /**
+         * Create a course from a PDF, a link or a subject name
+         * @description JSON for a link or a name; multipart for a PDF. The server queues a `course-outline` job: it finds the
+         *     chapters (without reading the whole source), asks the learner to approve the outline, then asks what they
+         *     already know to set up the Prelim. A subject name with no source runs the `course-plan` skill, which looks for
+         *     a syllabus or standard textbook to use as the spine. A scanned PDF with no text layer is not supported: the job
+         *     fails with a plain reason.
+         */
+        post: operations["createCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/courses/{course_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        /** One course with its chapters, their states and its jobs */
+        get: operations["getCourse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, change the goal, archive or unarchive */
+        patch: operations["updateCourse"];
+        trace?: never;
+    };
+    "/courses/{course_id}/outline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the outline job again (after a failure, or to start over) */
+        post: operations["redoCourseOutline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/courses/{course_id}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue chapter builds
+         * @description Chapters are built lazily. Give `chapter_ids` to build those, or `next` to build the next N planned chapters in
+         *     course order. Each build is a normal `enrich` job on the chapter. The work lane runs them one at a time.
+         */
+        post: operations["buildChapters"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/courses/{course_id}/chapters/{chapter_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+                chapter_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a chapter done, or not done
+         * @description Marks the chapter's pack as read and, when done, adds what the chapter teaches to the person profile
+         *     (`via: read`). Prerequisites advise: nothing is locked, but unfinished prerequisites are listed on the chapter.
+         */
+        post: operations["completeChapter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/quizzes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Quizzes made for a topic, chapter or course
+         * @description `topic_id` may also be a course scope id (`course--<id>`), which gives cumulative course quizzes.
+         */
+        get: operations["listQuizzes"];
+        put?: never;
+        /**
+         * Make a quiz (only when the learner asks)
+         * @description Queues a `quiz` job. The quiz appears with status `generating` and becomes `ready` when the job ends.
+         */
+        post: operations["createQuiz"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/quizzes/{quiz_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                quiz_id: components["parameters"]["QuizId"];
+            };
+            cookie?: never;
+        };
+        /** One quiz with its attempts. Answers are not included until an attempt is graded. */
+        get: operations["getQuiz"];
+        put?: never;
+        post?: never;
+        /** Delete a quiz */
+        delete: operations["deleteQuiz"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/quizzes/{quiz_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                quiz_id: components["parameters"]["QuizId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit answers
+         * @description Choice questions are graded at once on the server. Short-answer and explain questions are graded by a
+         *     `quiz-grade` job in the chat lane; the attempt is `grading` until it finishes.
+         */
+        post: operations["submitQuizAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        /** Take-home assignments for a topic or chapter */
+        get: operations["listAssignments"];
+        put?: never;
+        /**
+         * Make a take-home assignment (only when the learner asks)
+         * @description Optional context makes the task about something the learner cares about: a project they are building, a
+         *     situation at work, a link or a file. With no context the AI writes a generic task. JSON for text and a link,
+         *     multipart to attach a file. Queues an `assignment` job.
+         */
+        post: operations["createAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/assignments/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                assignment_id: components["parameters"]["AssignmentId"];
+            };
+            cookie?: never;
+        };
+        /** One assignment with its brief, submissions and reviews */
+        get: operations["getAssignment"];
+        put?: never;
+        post?: never;
+        /** Delete an assignment */
+        delete: operations["deleteAssignment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics/{topic_id}/assignments/{assignment_id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                assignment_id: components["parameters"]["AssignmentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit work
+         * @description Free text ("I built X, here is how"), a public link (a GitHub repository, a deployed page) or a file. Queues
+         *     an `assignment-review` job. Submitted code is read and reviewed, never run.
+         */
+        post: operations["submitAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -604,7 +856,9 @@ export interface components {
         TopicStatus: "captured" | "enriching" | "ready" | "failed" | "archived";
         Origin: {
             /** @enum {string} */
-            type: "link" | "pdf" | "topic";
+            type: "link" | "pdf" | "topic" | "chapter";
+            /** @description When type is chapter, the course it belongs to */
+            course_id?: string;
             /** @description When type is link */
             link?: string;
             /** @description When type is topic */
@@ -664,6 +918,8 @@ export interface components {
             /** @description Derived by the server. The first figure in the pack (or a condensed doc), relative to the topic folder, for cover art. */
             cover_path?: string | null;
             learning?: components["schemas"]["Learning"] | null;
+            /** @description Set when this topic is a chapter (or the Prelim) of a course. Chapters stay out of Home's topic list. */
+            course?: components["schemas"]["ChapterRef"] | null;
             failure_reason?: string | null;
             /** @description One sentence on what the topic is. Written by the enrich skills; falls back to the pack's description. */
             summary?: string | null;
@@ -672,6 +928,8 @@ export interface components {
         };
         TopicSummary: {
             id: string;
+            /** @description The course this chapter belongs to, if any */
+            course_id?: string | null;
             title: string;
             status: components["schemas"]["TopicStatus"];
             origin: components["schemas"]["Origin"];
@@ -801,15 +1059,16 @@ export interface components {
             updated: string;
         };
         /** @enum {string} */
-        JobKind: "enrich" | "enrich-deep" | "condense" | "answer";
+        JobKind: "enrich" | "enrich-deep" | "condense" | "answer" | "course-outline" | "quiz" | "quiz-grade" | "assignment" | "assignment-review";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "needs_input" | "succeeded" | "failed" | "cancelled";
         Job: {
             id: string;
             kind: components["schemas"]["JobKind"];
+            /** @description The topic the job works on. For course-level jobs (outline, course chat, course quiz) it is the course scope id, `course--<course id>`. */
             topic_id: string;
             /**
-             * @description Work jobs run one at a time; chat runs in its own lane so questions don't wait behind enrichment.
+             * @description Work jobs run one at a time; chat (and quiz grading) runs in its own lane so questions don't wait behind enrichment.
              * @enum {string}
              */
             lane: "work" | "chat";
@@ -971,6 +1230,329 @@ export interface components {
                 auth: string;
             };
         };
+        /** @description A chapter's place in its course. Stored in the course manifest and copied into the chapter's `topic.json`. */
+        ChapterRef: {
+            course_id: string;
+            /** @enum {string} */
+            kind: "chapter" | "prelim";
+            /** @description Position in the course, from 1. The Prelim is 0. */
+            order: number;
+            /** @description One or two sentences on what the chapter covers */
+            summary?: string | null;
+            /** @description Chapter topic ids. Advisory, never a lock. */
+            prereqs?: string[];
+            /** @description Concepts this chapter explains. Added to the person profile when the chapter is marked done. */
+            teaches?: string[];
+            /** @description Concepts the chapter takes for granted. Anything no finished prerequisite covers is asked about. */
+            assumes?: string[];
+            /** @description Where in the course's central resources this chapter's material is. */
+            source_range?: components["schemas"]["SourceRange"] | null;
+        };
+        /** @description A chapter as listed in `course.json`. Its `id` is the chapter's topic id. */
+        CourseChapter: {
+            id: string;
+            title: string;
+            /** @enum {string} */
+            kind: "chapter" | "prelim";
+            order: number;
+            summary?: string | null;
+            prereqs: string[];
+            teaches: string[];
+            assumes: string[];
+            source_range?: components["schemas"]["SourceRange"] | null;
+        };
+        SourceRange: {
+            /** @description Path of the central resource relative to the course folder (sources/ddia.pdf), a URL, or null when the chapter has no single source */
+            source?: string | null;
+            /** @description Human text, for example "pp. 17 to 45" or "Chapter 3" */
+            label: string;
+            /** @description First page */
+            from?: number | null;
+            /** @description Last page */
+            to?: number | null;
+        };
+        /**
+         * @description captured: just added. planning: the outline job is running or waiting for approval. ready: the outline is
+         *     approved and chapters exist. failed: the outline job failed.
+         * @enum {string}
+         */
+        CourseStatus: "captured" | "planning" | "ready" | "failed" | "archived";
+        /** @description The course manifest (`course.json`) as the server sees it. */
+        Course: {
+            id: string;
+            title: string;
+            /** @description Free text from the learner */
+            goal?: string | null;
+            status: components["schemas"]["CourseStatus"];
+            origin: components["schemas"]["Origin"];
+            summary?: string | null;
+            /** @description In study order, the Prelim first when there is one. */
+            chapters: components["schemas"]["CourseChapter"][];
+            /** @description Central resources, derived from the course's `sources/` folder. */
+            sources: {
+                /** @description Relative to the course folder */
+                path: string;
+                title: string;
+                url?: string | null;
+            }[];
+            failure_reason?: string | null;
+            session_id?: string | null;
+            session_cli?: components["schemas"]["CliId"] | null;
+            created: string;
+            updated: string;
+        };
+        /**
+         * @description planned (a shell with no pack), building, ready (pack built, not started), in_progress, done.
+         * @enum {string}
+         */
+        ChapterState: "planned" | "building" | "ready" | "in_progress" | "done";
+        ChapterView: {
+            id: string;
+            title: string;
+            /** @enum {string} */
+            kind: "chapter" | "prelim";
+            order: number;
+            summary?: string | null;
+            state: components["schemas"]["ChapterState"];
+            prereqs: string[];
+            /** @description Prerequisite chapter ids that are not done yet. Advisory. */
+            unmet_prereqs: string[];
+            teaches?: string[];
+            source_range?: components["schemas"]["SourceRange"] | null;
+            topic: components["schemas"]["TopicSummary"];
+        };
+        CourseSummary: {
+            id: string;
+            title: string;
+            status: components["schemas"]["CourseStatus"];
+            origin: components["schemas"]["Origin"];
+            summary?: string | null;
+            counts: {
+                chapters: number;
+                /** @description Chapters with a pack */
+                built: number;
+                done: number;
+            };
+            progress: {
+                /** @description Chapters done over chapters, 0 to 1 */
+                fraction: number;
+            };
+            /** @description The first chapter not done, in course order. */
+            next_chapter?: {
+                id: string;
+                title: string;
+                state: components["schemas"]["ChapterState"];
+            } | null;
+            failure_reason?: string | null;
+            active_job?: components["schemas"]["Job"] | null;
+            updated: string;
+        };
+        CourseList: {
+            courses: components["schemas"]["CourseSummary"][];
+        };
+        CourseDetail: {
+            course: components["schemas"]["Course"];
+            chapters: components["schemas"]["ChapterView"][];
+            /** @description Active jobs first (the outline job, chapter builds), then recent finished ones */
+            jobs: components["schemas"]["Job"][];
+            chat_available: boolean;
+            chat_unavailable_reason?: string | null;
+            /** @description What building the rest costs, so the learner can choose how many to build. */
+            estimate: {
+                /** @description Chapters with no pack yet, each one enrich run */
+                planned_chapters: number;
+            };
+        };
+        CreateCourse: {
+            origin: {
+                /** @enum {string} */
+                type: "link" | "topic";
+                /** Format: uri */
+                link?: string;
+                name?: string;
+            };
+            title?: string;
+            goal?: string;
+        };
+        CourseWithJob: {
+            course: components["schemas"]["Course"];
+            job: components["schemas"]["Job"] | null;
+        };
+        UpdateCourse: {
+            title?: string;
+            goal?: string;
+            archived?: boolean;
+        };
+        BuildChapters: {
+            chapter_ids?: string[];
+            /** @description Build the next N planned chapters in course order */
+            next?: number;
+        };
+        QuizQuestion: {
+            id: string;
+            /**
+             * @description choice is graded on the server; the others by a grading job
+             * @enum {string}
+             */
+            type: "choice" | "short" | "explain" | "spot_error";
+            /** @description Markdown */
+            prompt: string;
+            /** @description For choice questions */
+            options?: {
+                id: string;
+                label: string;
+            }[];
+            /** @description The concept this question tests */
+            concept?: string | null;
+            /** @description Pack section id to reread, for the Reader */
+            section?: string | null;
+            /** @description In a course quiz, the chapter the question draws from */
+            chapter_id?: string | null;
+        };
+        QuestionResult: {
+            /** @description 0 to 1 */
+            score: number;
+            correct?: boolean | null;
+            feedback?: string | null;
+            correct_option?: string | null;
+            explanation?: string | null;
+        };
+        QuizAttempt: {
+            id: string;
+            /** @enum {string} */
+            status: "grading" | "graded" | "failed";
+            created: string;
+            answers: {
+                [key: string]: {
+                    selected?: string | null;
+                    text?: string | null;
+                };
+            };
+            results?: {
+                [key: string]: components["schemas"]["QuestionResult"];
+            };
+            /** @description 0 to 1 over all questions, null while grading */
+            score?: number | null;
+            weak_concepts?: string[];
+            job_id?: string | null;
+        };
+        Quiz: {
+            id: string;
+            title: string;
+            /** @enum {string} */
+            status: "generating" | "ready" | "failed";
+            /** @description The topic id or course scope id */
+            scope: string;
+            focus?: string | null;
+            failure_reason?: string | null;
+            questions: components["schemas"]["QuizQuestion"][];
+            attempts: components["schemas"]["QuizAttempt"][];
+            created: string;
+        };
+        QuizList: {
+            quizzes: components["schemas"]["Quiz"][];
+        };
+        CreateQuiz: {
+            /** @default 8 */
+            count: number;
+            /** @description A concept or section to concentrate on */
+            focus?: string;
+            /** @description For a course quiz, limit it to these chapters. Default is every finished chapter. */
+            chapter_ids?: string[];
+        };
+        QuizWithJob: {
+            quiz: components["schemas"]["Quiz"];
+            job: components["schemas"]["Job"];
+        };
+        SubmitAttempt: {
+            answers: {
+                [key: string]: {
+                    selected?: string | null;
+                    text?: string | null;
+                };
+            };
+        };
+        AssignmentBrief: {
+            title: string;
+            summary?: string | null;
+            /** @description Markdown */
+            task: string;
+            constraints?: string[];
+            acceptance?: {
+                id: string;
+                text: string;
+            }[];
+            stretch?: string | null;
+            /** @description For example "2 to 3 hours" */
+            estimate?: string | null;
+            /** @description One line on how the learner's context shaped the task */
+            grounded_in?: string | null;
+        };
+        CriterionReview: {
+            id: string;
+            /** @enum {string} */
+            met: "yes" | "partly" | "no";
+            feedback?: string | null;
+        };
+        Review: {
+            summary: string;
+            criteria: components["schemas"]["CriterionReview"][];
+            next_steps?: string[];
+            /** @description Where to reread what was missed */
+            pointers?: {
+                label: string;
+                section?: string | null;
+            }[];
+        };
+        Submission: {
+            id: string;
+            /** @enum {string} */
+            kind: "text" | "link" | "file";
+            text?: string | null;
+            link?: string | null;
+            /** @description Path relative to the topic folder */
+            file?: string | null;
+            /** @enum {string} */
+            status: "submitted" | "reviewing" | "reviewed" | "failed";
+            review?: components["schemas"]["Review"] | null;
+            job_id?: string | null;
+            created: string;
+        };
+        Assignment: {
+            id: string;
+            title: string;
+            /** @enum {string} */
+            status: "briefing" | "open" | "failed";
+            failure_reason?: string | null;
+            /** @description What the learner gave to make the task relevant, or null for a generic task. */
+            context?: {
+                text?: string | null;
+                link?: string | null;
+                file?: string | null;
+            } | null;
+            brief?: components["schemas"]["AssignmentBrief"] | null;
+            submissions: components["schemas"]["Submission"][];
+            job_id?: string | null;
+            created: string;
+        };
+        AssignmentList: {
+            assignments: components["schemas"]["Assignment"][];
+        };
+        CreateAssignment: {
+            context_text?: string;
+            /** Format: uri */
+            context_link?: string;
+            focus?: string;
+        };
+        AssignmentWithJob: {
+            assignment: components["schemas"]["Assignment"];
+            job: components["schemas"]["Job"];
+        };
+        CreateSubmission: {
+            text?: string;
+            /** Format: uri */
+            link?: string;
+        };
         /** @enum {string} */
         EventType: "resync" | "job.updated" | "job.log" | "chat.delta" | "chat.message" | "topic.updated" | "topic.removed" | "inbox.updated";
         /** @description The JSON in an SSE `data:` line. `id` repeats the SSE id. */
@@ -1062,6 +1644,9 @@ export interface components {
     };
     parameters: {
         TopicId: string;
+        CourseId: string;
+        QuizId: string;
+        AssignmentId: string;
         ResourceId: string;
         JobId: string;
         /** @description Path relative to the library root, for example `topics/pc-ca-mcts/pack/pack.html`. May contain slashes. */
@@ -1790,6 +2375,477 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatTurn"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listCourses: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCourse"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    title?: string;
+                    goal?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseWithJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCourse"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    redoCourseOutline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    buildChapters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildChapters"];
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    completeChapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: components["parameters"]["CourseId"];
+                chapter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    done: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listQuizzes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createQuiz: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuiz"];
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizWithJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getQuiz: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                quiz_id: components["parameters"]["QuizId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quiz"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteQuiz: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                quiz_id: components["parameters"]["QuizId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    submitQuizAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                quiz_id: components["parameters"]["QuizId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitAttempt"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizAttempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAssignment"];
+                "multipart/form-data": {
+                    context_text?: string;
+                    context_link?: string;
+                    /** Format: binary */
+                    context_file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentWithJob"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                assignment_id: components["parameters"]["AssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                assignment_id: components["parameters"]["AssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    submitAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                assignment_id: components["parameters"]["AssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSubmission"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    text?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignment"];
                 };
             };
             400: components["responses"]["BadRequest"];

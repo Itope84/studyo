@@ -1,11 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AnswerSet, CliId, JobKind, QuestionSet, Settings, Topic } from '@studyo/api';
+import { courseIdOf, isCourseScope } from '@studyo/api';
 import type { AdapterEvent, CliAdapter, RunRequest } from '../adapters/types.ts';
 import type { ChatStore } from '../chat.ts';
+import type { Courses } from '../courses.ts';
 import type { EventBus } from '../events.ts';
 import type { Library } from '../library.ts';
 import { renderTopic } from '../render.ts';
+import { parseJsonObject, type Study } from '../study.ts';
 import { conflict, nowIso } from '../util.ts';
 import {
   answersPrompt,
@@ -22,6 +25,11 @@ const TIME_LIMIT_MIN: Record<JobKind, number> = {
   'enrich-deep': 90,
   condense: 30,
   answer: 6,
+  'course-outline': 40,
+  quiz: 12,
+  'quiz-grade': 6,
+  assignment: 12,
+  'assignment-review': 15,
 };
 
 export interface RunnerDeps {
@@ -29,6 +37,8 @@ export interface RunnerDeps {
   store: JobStore;
   bus: EventBus;
   chat: ChatStore;
+  courses: Courses;
+  study: Study;
   adapters: Record<CliId, CliAdapter>;
   settings: () => Settings;
   notify?: (job: JobRecord, topic: Topic | null) => void;
@@ -53,7 +63,7 @@ export class Runner {
           error: 'The server restarted while this job was running.',
           finished: nowIso(),
         });
-        void this.settleTopicAfterStop(job, 'The server restarted while the pack was being built.');
+        void this.settleTopicAfterStop(job, 'The server restarted while the job was running.');
       }
     }
     void this.settleOrphans();
@@ -62,6 +72,20 @@ export class Runner {
 
   /** Topics left "enriching" with no job behind them (a hand run, a crash) get an honest status. */
   private async settleOrphans() {
+    for (const id of await this.d.library.courseIds()) {
+      try {
+        const m = await this.d.courses.readManifest(id);
+        if (m.status === 'planning' && !this.d.store.activeWork(`course--${id}`)) {
+          await this.d.courses.setStatus(
+            id,
+            m.chapters.length ? 'ready' : 'failed',
+            m.chapters.length ? null : 'The outline was interrupted. Start it again.',
+          );
+        }
+      } catch {
+        // Unreadable course; leave it for the person to fix.
+      }
+    }
     for (const id of await this.d.library.topicIds()) {
       try {
         const m = await this.d.library.readManifest(id);
@@ -135,6 +159,7 @@ export class Runner {
         try {
           await this.run(job, controller);
         } catch (e) {
+          if (this.stopped) return; // shutting down: the database may already be closed
           this.d.store.log(job.id, 'system', `Runner error: ${(e as Error).stack ?? e}`);
           this.d.store.update(job.id, {
             status: 'failed',
@@ -156,7 +181,11 @@ export class Runner {
     const adapter = adapters[job.cli];
     const phase: 'start' | 'resume' = job.pending_input ? 'resume' : 'start';
     const topicPath = library.topicDir(job.topic_id);
-    const topic = await library.readTopic(job.topic_id, { persist: true });
+    const scoped = isCourseScope(job.topic_id);
+    const courseId = scoped ? courseIdOf(job.topic_id) : null;
+    const topic = scoped ? null : await library.readTopic(job.topic_id, { persist: true });
+    const courseManifest = courseId ? await this.d.courses.readManifest(courseId) : null;
+    const coursePath = topic?.course ? library.courseDir(topic.course.course_id) : null;
     const settings = this.d.settings();
 
     let resume: string | null = null;
@@ -167,7 +196,7 @@ export class Runner {
     else if (job.kind === 'answer') {
       const chat = this.d.chat.read(job.topic_id);
       if (chat.session_id && chat.session_cli === job.cli) resume = chat.session_id;
-      else if (topic.session_id && topic.session_cli === job.cli) {
+      else if (topic?.session_id && topic.session_cli === job.cli) {
         resume = topic.session_id;
         fork = true;
       }
@@ -175,8 +204,12 @@ export class Runner {
 
     // Answers are in hand (or this is a fresh start), so any old question file is stale.
     this.clearQuestions(job.topic_id);
-    if (job.kind === 'enrich' || job.kind === 'enrich-deep') {
+    if (!scoped && (job.kind === 'enrich' || job.kind === 'enrich-deep')) {
       await library.setStatus(job.topic_id, 'enriching');
+      this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+    }
+    if (courseId && job.kind === 'course-outline' && phase === 'start') {
+      await this.d.courses.setStatus(courseId, 'planning');
       this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
     }
     store.update(job.id, {
@@ -194,7 +227,17 @@ export class Runner {
     const prompt =
       phase === 'resume'
         ? answersPrompt(JSON.parse(job.pending_input as string) as AnswerSet)
-        : startPrompt(job.kind, topic, topicPath, job.params ?? {});
+        : startPrompt({
+            kind: job.kind,
+            topic,
+            scope: job.topic_id,
+            path: topicPath,
+            coursePath,
+            courseOrigin: courseManifest?.origin.type,
+            courseGoal: courseManifest?.goal ?? null,
+            courseOriginLine: courseManifest ? originLine(courseManifest.origin) : null,
+            params: job.params ?? {},
+          });
 
     // Chat reply state: text after the last tool call is the answer; earlier text was the model thinking aloud.
     let reply = '';
@@ -217,7 +260,7 @@ export class Runner {
         case 'session':
           sessionId = e.sessionId;
           store.update(job.id, { session_id: e.sessionId });
-          if (job.kind === 'enrich' && phase === 'start') {
+          if (topic && job.kind === 'enrich' && phase === 'start') {
             void this.saveTopicSession(job.topic_id, e.sessionId, job.cli);
           }
           if (job.kind === 'answer') this.d.chat.setSession(job.topic_id, e.sessionId, job.cli);
@@ -279,10 +322,10 @@ export class Runner {
       resume,
       fork,
       model: settings.models?.[job.cli] ?? null,
-      policy: job.kind === 'answer' ? 'read-only' : 'work',
+      policy: job.kind === 'answer' || job.kind === 'quiz-grade' ? 'read-only' : 'work',
       streamText: job.kind === 'answer',
       signal: controller.signal,
-      meta: { kind: job.kind, phase, topicPath },
+      meta: { kind: job.kind, phase, topicPath, params: { ...job.params, scope: job.topic_id } },
     };
     const outcome = await adapter.run(req, onEvent).finally(() => clearTimeout(timer));
     if (outcome.sessionId) sessionId = outcome.sessionId;
@@ -320,6 +363,21 @@ export class Runner {
       return;
     }
 
+    // Grading replies with JSON, which the server merges into the attempt.
+    if (job.kind === 'quiz-grade') {
+      const attempt = await this.d.study.applyGrades(
+        job.topic_id,
+        String(job.params?.quiz_id),
+        String(job.params?.attempt_id),
+        resultOk ? (finalText ?? reply) : null,
+      );
+      this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+      if (!attempt || attempt.status === 'failed')
+        return this.fail(job, resultError ?? 'The answers could not be graded.', false);
+      store.update(job.id, { status: 'succeeded', finished: nowIso(), activity: 'Graded' });
+      return;
+    }
+
     // A skill that wrote questions is waiting for the learner.
     const questions = this.readQuestions(job.topic_id);
     if (questions) {
@@ -337,6 +395,41 @@ export class Runner {
     if (!resultOk || outcome.exitCode !== 0) {
       const why = resultError ?? stderrTail.at(-1) ?? `exited with code ${outcome.exitCode}`;
       return this.fail(job, `${adapter.label} stopped: ${why}`);
+    }
+
+    // Course outline: the skill wrote course.json; the server makes the chapter folders.
+    if (courseId && job.kind === 'course-outline') {
+      const m = await this.d.courses.readManifest(courseId);
+      if (m.status === 'failed')
+        return this.fail(job, m.failure_reason ?? 'The outline could not be made.', false);
+      if (!m.chapters.length) return this.fail(job, 'The run finished without any chapters.');
+      if (m.status !== 'ready') await this.d.courses.setStatus(courseId, 'ready');
+      for (const id of await this.d.courses.materialise(courseId))
+        this.d.bus.emit('topic.updated', { topic_id: id });
+      store.log(job.id, 'progress', 'Done');
+      const done = store.update(job.id, {
+        status: 'succeeded',
+        finished: nowIso(),
+        activity: 'Done',
+      });
+      this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+      this.d.notify?.(done, null);
+      return;
+    }
+
+    // Quizzes and take-home work leave a file; a missing or unfinished file is a failure.
+    if (job.kind === 'quiz' || job.kind === 'assignment' || job.kind === 'assignment-review') {
+      const bad = await this.checkStudyOutput(job);
+      if (bad) return this.fail(job, bad);
+      store.log(job.id, 'progress', 'Done');
+      const done = store.update(job.id, {
+        status: 'succeeded',
+        finished: nowIso(),
+        activity: 'Done',
+      });
+      this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+      this.d.notify?.(done, topic);
+      return;
     }
 
     // Success: check what the skill left behind, render documents, settle the topic status.
@@ -371,22 +464,99 @@ export class Runner {
     });
     if (settleTopic) await this.settleTopicAfterStop(job, message);
     this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
-    if (job.kind !== 'answer') this.d.notify?.(failed, null);
+    if (job.kind !== 'answer' && job.kind !== 'quiz-grade') this.d.notify?.(failed, null);
   }
 
-  /** After a job stops early, leave the topic in an honest state. */
+  /** After a job stops early, leave the topic (or course, quiz, assignment) in an honest state. */
   private async settleTopicAfterStop(job: JobRecord, failure: string | null) {
-    if (job.kind === 'answer') return;
+    const { courses, study, library, bus } = this.d;
     try {
-      const topic = await this.d.library.readTopic(job.topic_id, { persist: false });
+      switch (job.kind) {
+        case 'answer':
+          return;
+        case 'course-outline': {
+          const id = courseIdOf(job.topic_id);
+          const m = await courses.readManifest(id);
+          if (m.status === 'planning') {
+            // An approved outline survives a later failure; without one the course is failed.
+            if (m.chapters.length) await courses.setStatus(id, 'ready');
+            else await courses.setStatus(id, 'failed', failure ?? 'The outline was cancelled.');
+          }
+          bus.emit('topic.updated', { topic_id: job.topic_id });
+          return;
+        }
+        case 'quiz':
+          await study.finishQuiz(
+            job.topic_id,
+            String(job.params?.quiz_id),
+            false,
+            failure ?? 'Cancelled.',
+          );
+          bus.emit('topic.updated', { topic_id: job.topic_id });
+          return;
+        case 'quiz-grade':
+          await study.applyGrades(
+            job.topic_id,
+            String(job.params?.quiz_id),
+            String(job.params?.attempt_id),
+            null,
+          );
+          bus.emit('topic.updated', { topic_id: job.topic_id });
+          return;
+        case 'assignment':
+          await study.finishBrief(
+            job.topic_id,
+            String(job.params?.assignment_id),
+            false,
+            failure ?? 'Cancelled.',
+          );
+          bus.emit('topic.updated', { topic_id: job.topic_id });
+          return;
+        case 'assignment-review':
+          await study.finishReview(
+            job.topic_id,
+            String(job.params?.assignment_id),
+            String(job.params?.submission_id),
+            false,
+            failure ?? 'Cancelled.',
+          );
+          bus.emit('topic.updated', { topic_id: job.topic_id });
+          return;
+      }
+      const topic = await library.readTopic(job.topic_id, { persist: false });
       if (topic.status !== 'enriching') return;
       const hasPack = topic.resources.some((r) => r.type === 'pack');
-      if (failure && !hasPack) await this.d.library.setStatus(job.topic_id, 'failed', failure);
-      else await this.d.library.setStatus(job.topic_id, hasPack ? 'ready' : 'captured');
-      this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+      if (failure && !hasPack) await library.setStatus(job.topic_id, 'failed', failure);
+      else await library.setStatus(job.topic_id, hasPack ? 'ready' : 'captured');
+      bus.emit('topic.updated', { topic_id: job.topic_id });
     } catch {
-      // Topic folder gone; nothing to settle.
+      // Folder gone; nothing to settle.
     }
+  }
+
+  /** Returns a reason when the file a quiz or take-home job should have written is missing or unfinished. */
+  private async checkStudyOutput(job: JobRecord): Promise<string | null> {
+    const { study } = this.d;
+    if (job.kind === 'quiz') {
+      const id = String(job.params?.quiz_id);
+      await study.finishQuiz(job.topic_id, id, true, null);
+      const quiz = await study.getQuiz(job.topic_id, id);
+      return quiz.status === 'ready'
+        ? null
+        : (quiz.failure_reason ?? 'The quiz could not be written.');
+    }
+    if (job.kind === 'assignment') {
+      const id = String(job.params?.assignment_id);
+      await study.finishBrief(job.topic_id, id, true, null);
+      const a = await study.getAssignment(job.topic_id, id);
+      return a.status === 'open' ? null : (a.failure_reason ?? 'The brief could not be written.');
+    }
+    const aid = String(job.params?.assignment_id);
+    const sid = String(job.params?.submission_id);
+    await study.finishReview(job.topic_id, aid, sid, true, null);
+    const a = await study.getAssignment(job.topic_id, aid);
+    const s = a.submissions.find((x) => x.id === sid);
+    return s?.status === 'reviewed' ? null : 'The review could not be written.';
   }
 
   private failChatMessage(job: JobRecord, error: string) {
@@ -432,3 +602,11 @@ export class Runner {
 
   publicJob = publicJob;
 }
+
+function originLine(origin: { type: string; link?: string; file?: string; name?: string }): string {
+  if (origin.type === 'link') return `link ${origin.link}`;
+  if (origin.type === 'pdf') return `pdf ${origin.file}`;
+  return `topic ${origin.name ?? ''}`;
+}
+
+export { parseJsonObject };

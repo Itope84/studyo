@@ -9,11 +9,18 @@ Plain-file skills that run the same from Claude Code, OpenCode or the job runner
 | `enrich-topic` | Topic started from a name | Standard, bounded. Finds an anchor source, then follows `enrich-document` |
 | `enrich-deep` | Only when the user asks, on a topic with a pack | Deep, large budget, verification and counter-review |
 | `condense` | Only when the user asks | Teaches the pack's material at the learner's level; facts from the pack, explanation is its own |
-| `answer` | Chat in a topic | Read-only, no web |
+| `answer` | Chat in a topic, chapter or course | Read-only, no web. Rework planned |
+| `course-outline` | Course from a PDF or link | Structure only, never the whole book. Asks to approve the outline, then what you know |
+| `course-plan` | Course from a subject name | Finds a spine (syllabus, textbook), then `course-outline` |
+| `enrich-chapter` | Build one course chapter, or the Prelim | Like `enrich-document` on the chapter's slice, minus what earlier chapters teach |
+| `quiz`, `quiz-grade` | Only when the learner asks | Questions from the pack, free-text grading against a rubric |
+| `assignment`, `assignment-review` | Only when the learner asks | Take-home from optional context; review reads, never runs, submissions |
 
 The stopping rule for enrichment is sufficiency, not a section count. `_shared/limits.md` holds only cost ceilings.
 
-Typical flow: `enrich-document` or `enrich-topic` → (optional) `enrich-deep` → (optional) `condense`. `answer` works at any point after a pack exists. All budgets are in `_shared/limits.md`.
+Courses: `course-outline` (or `course-plan` first) writes `courses/<id>/course.json`; chapters are then built one at a time with `enrich-chapter`. See `_shared/course-folder.md`.
+
+Typical flow for a topic: `enrich-document` or `enrich-topic` → (optional) `enrich-deep` → (optional) `condense`. `answer` works at any point after a pack exists. All budgets are in `_shared/limits.md`.
 
 ## Install
 

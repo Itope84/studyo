@@ -1,0 +1,42 @@
+{
+  "steps": [
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] 4/6 approved: writing chapters"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "course.json",
+        "content": "{\n  \"id\": \"{{dir}}\",\n  \"title\": \"Replay course\",\n  \"goal\": \"Understand replication\",\n  \"status\": \"ready\",\n  \"origin\": {\n    \"type\": \"pdf\",\n    \"file\": \"sources/S1-replay.pdf\"\n  },\n  \"summary\": \"A replay course about replicated data.\",\n  \"learning\": {\n    \"goal\": \"Understand replication\",\n    \"gaps\": [\n      \"latency\",\n      \"packets\"\n    ],\n    \"updated\": \"2026-10-03\"\n  },\n  \"chapters\": [\n    {\n      \"id\": \"{{dir}}-prelim\",\n      \"title\": \"Prelim: Networking basics\",\n      \"kind\": \"prelim\",\n      \"order\": 0,\n      \"summary\": \"Just enough networking to follow the book.\",\n      \"prereqs\": [],\n      \"teaches\": [\n        \"latency\",\n        \"packets\"\n      ],\n      \"assumes\": [],\n      \"source_range\": null\n    },\n    {\n      \"id\": \"{{dir}}-01-reliable\",\n      \"title\": \"Reliable systems\",\n      \"kind\": \"chapter\",\n      \"order\": 1,\n      \"summary\": \"What reliability means and how to measure it.\",\n      \"prereqs\": [],\n      \"teaches\": [\n        \"reliability\",\n        \"percentile latency\"\n      ],\n      \"assumes\": [\n        \"client-server architecture\"\n      ],\n      \"source_range\": {\n        \"source\": \"sources/S1-replay.pdf\",\n        \"label\": \"pp. 3 to 28\",\n        \"from\": 3,\n        \"to\": 28\n      }\n    },\n    {\n      \"id\": \"{{dir}}-02-replication\",\n      \"title\": \"Replication\",\n      \"kind\": \"chapter\",\n      \"order\": 2,\n      \"summary\": \"Keeping copies of data on several machines.\",\n      \"prereqs\": [\n        \"{{dir}}-01-reliable\"\n      ],\n      \"teaches\": [\n        \"leader-follower replication\",\n        \"replication lag\"\n      ],\n      \"assumes\": [\n        \"reliability\"\n      ],\n      \"source_range\": {\n        \"source\": \"sources/S1-replay.pdf\",\n        \"label\": \"pp. 29 to 60\",\n        \"from\": 29,\n        \"to\": 60\n      }\n    },\n    {\n      \"id\": \"{{dir}}-03-consensus\",\n      \"title\": \"Consensus\",\n      \"kind\": \"chapter\",\n      \"order\": 3,\n      \"summary\": \"Getting machines to agree.\",\n      \"prereqs\": [\n        \"{{dir}}-02-replication\"\n      ],\n      \"teaches\": [\n        \"quorum\",\n        \"consensus\"\n      ],\n      \"assumes\": [\n        \"replication lag\"\n      ],\n      \"source_range\": {\n        \"source\": \"sources/S1-replay.pdf\",\n        \"label\": \"pp. 61 to 95\",\n        \"from\": 61,\n        \"to\": 95\n      }\n    }\n  ],\n  \"created\": \"{{now}}\",\n  \"updated\": \"{{now}}\"\n}"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "index.md",
+        "content": "# Replay course\n\n## Reliable systems\nWhat reliability means.\n\n## Replication\nCopies of data.\n\n## Consensus\nAgreement.\n"
+      }
+    },
+    {
+      "delay": 200,
+      "event": {
+        "type": "text",
+        "text": "[studyo] 6/6 done: 3 chapters, 2 prerequisite links, prelim: yes"
+      }
+    },
+    {
+      "delay": 50,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.02
+      }
+    }
+  ]
+}

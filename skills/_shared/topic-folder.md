@@ -21,6 +21,8 @@ The contract between skills, server and app. Skills work inside **one topic fold
     condensed-<slug>.html  rendered
     assets/
   chat/                    written by the server, not by skills
+  quizzes/<id>.json        written by the quiz skill, on request (see skills/quiz)
+  assignments/<id>/        take-home work: assignment.json, context/, submissions/, reviews/ (see skills/assignment)
   _job/                    written by the job runner and by skills asking questions (see below)
 ```
 
@@ -35,6 +37,7 @@ Skills read it first and update it when they finish. Edit by reading the whole f
 - `status`: set `ready` on success. On an unrecoverable failure set `failed` and add `failure_reason` (one plain sentence), and print `[studyo] FAILED: <reason>`.
 - `resources`: add or update an entry for each file you produce, with `id`, `type` (`source` | `pack` | `condensed`), `title`, `path` (relative to the topic folder), `made_with` (the CLI and model name if known), `size`, `added`.
 - Add the `pack.html` and `condensed-*.html` files as the same resource as their `.md` source. They are renderings, not separate resources.
+- `course`: present when this topic is a chapter of a course (`course_id`, `kind`, `order`, `prereqs`, `teaches`, `assumes`, `source_range`, `summary`). Owned by the server and the course skills. Chapter skills read it and never change it. See `course-folder.md`.
 - `learning`: `{goal, gaps, updated}`, written by `level-check`. Gaps are the concepts to explain for this topic.
 - `summary`: one plain sentence on what the topic is about, written by the enrich skills when they finish (for example "How log-structured storage engines trade read speed for fast writes."). The app shows it under the title.
 - `updated`: now, ISO 8601.
@@ -44,7 +47,8 @@ Skills read it first and update it when they finish. Edit by reading the whole f
 
 The job runner (or you, by hand) gives each skill these. Read them from the prompt.
 
-- `topic_path` (required): absolute path to the topic folder.
+- `topic_path` (required for topic and chapter skills): absolute path to the topic folder.
+- `course_path`: absolute path to the course folder, for course skills and for chapter skills. See `course-folder.md`.
 - `interactive`: how a person can answer questions during the run.
   - `true` (default when run by hand): ask in the conversation.
   - `app`: the job runner relays questions to the Studyo app. See "Asking through the app" below.

@@ -70,7 +70,7 @@ export class JobStore {
     params?: Record<string, unknown>;
   }): JobRecord {
     const id = newId('job');
-    const lane = input.kind === 'answer' ? 'chat' : 'work';
+    const lane = input.kind === 'answer' || input.kind === 'quiz-grade' ? 'chat' : 'work';
     this.db
       .prepare(
         'INSERT INTO jobs (id, topic_id, kind, lane, status, cli, params, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

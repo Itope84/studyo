@@ -19,7 +19,12 @@ export interface RunRequest {
   streamText?: boolean;
   signal: AbortSignal;
   /** Job metadata, used only by the replay adapter to pick a script. */
-  meta?: { kind: string; phase: 'start' | 'resume'; topicPath: string };
+  meta?: {
+    kind: string;
+    phase: 'start' | 'resume';
+    topicPath: string;
+    params?: Record<string, unknown>;
+  };
 }
 
 export type AdapterEvent =

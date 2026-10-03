@@ -27,6 +27,9 @@ security:
 tags:
   - name: server
   - name: topics
+  - name: courses
+  - name: quizzes
+  - name: assignments
   - name: files
   - name: progress
   - name: jobs
@@ -565,6 +568,357 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /courses:
+    get:
+      tags: [courses]
+      summary: All courses, with how far through each and what to study next
+      operationId: listCourses
+      parameters:
+        - name: include_archived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [courses]
+      summary: Create a course from a PDF, a link or a subject name
+      description: |
+        JSON for a link or a name; multipart for a PDF. The server queues a `course-outline` job: it finds the
+        chapters (without reading the whole source), asks the learner to approve the outline, then asks what they
+        already know to set up the Prelim. A subject name with no source runs the `course-plan` skill, which looks for
+        a syllabus or standard textbook to use as the spine. A scanned PDF with no text layer is not supported: the job
+        fails with a plain reason.
+      operationId: createCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCourse' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                goal: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseWithJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /courses/{course_id}:
+    parameters:
+      - $ref: '#/components/parameters/CourseId'
+    get:
+      tags: [courses]
+      summary: One course with its chapters, their states and its jobs
+      operationId: getCourse
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [courses]
+      summary: Rename, change the goal, archive or unarchive
+      operationId: updateCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCourse' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /courses/{course_id}/outline:
+    parameters:
+      - $ref: '#/components/parameters/CourseId'
+    post:
+      tags: [courses]
+      summary: Run the outline job again (after a failure, or to start over)
+      operationId: redoCourseOutline
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /courses/{course_id}/build:
+    parameters:
+      - $ref: '#/components/parameters/CourseId'
+    post:
+      tags: [courses]
+      summary: Queue chapter builds
+      description: |
+        Chapters are built lazily. Give `chapter_ids` to build those, or `next` to build the next N planned chapters in
+        course order. Each build is a normal `enrich` job on the chapter. The work lane runs them one at a time.
+      operationId: buildChapters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BuildChapters' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /courses/{course_id}/chapters/{chapter_id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/CourseId'
+      - name: chapter_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [courses]
+      summary: Mark a chapter done, or not done
+      description: |
+        Marks the chapter's pack as read and, when done, adds what the chapter teaches to the person profile
+        (`via: read`). Prerequisites advise: nothing is locked, but unfinished prerequisites are listed on the chapter.
+      operationId: completeChapter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [done]
+              properties:
+                done: { type: boolean }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/quizzes:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    get:
+      tags: [quizzes]
+      summary: Quizzes made for a topic, chapter or course
+      description: '`topic_id` may also be a course scope id (`course--<id>`), which gives cumulative course quizzes.'
+      operationId: listQuizzes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuizList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [quizzes]
+      summary: Make a quiz (only when the learner asks)
+      description: Queues a `quiz` job. The quiz appears with status `generating` and becomes `ready` when the job ends.
+      operationId: createQuiz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateQuiz' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuizWithJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics/{topic_id}/quizzes/{quiz_id}:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/QuizId'
+    get:
+      tags: [quizzes]
+      summary: One quiz with its attempts. Answers are not included until an attempt is graded.
+      operationId: getQuiz
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quiz' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [quizzes]
+      summary: Delete a quiz
+      operationId: deleteQuiz
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/quizzes/{quiz_id}/attempts:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/QuizId'
+    post:
+      tags: [quizzes]
+      summary: Submit answers
+      description: |
+        Choice questions are graded at once on the server. Short-answer and explain questions are graded by a
+        `quiz-grade` job in the chat lane; the attempt is `grading` until it finishes.
+      operationId: submitQuizAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitAttempt' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuizAttempt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics/{topic_id}/assignments:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    get:
+      tags: [assignments]
+      summary: Take-home assignments for a topic or chapter
+      operationId: listAssignments
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssignmentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [assignments]
+      summary: Make a take-home assignment (only when the learner asks)
+      description: |
+        Optional context makes the task about something the learner cares about: a project they are building, a
+        situation at work, a link or a file. With no context the AI writes a generic task. JSON for text and a link,
+        multipart to attach a file. Queues an `assignment` job.
+      operationId: createAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssignment' }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                context_text: { type: string }
+                context_link: { type: string }
+                context_file: { type: string, format: binary }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssignmentWithJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics/{topic_id}/assignments/{assignment_id}:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      tags: [assignments]
+      summary: One assignment with its brief, submissions and reviews
+      operationId: getAssignment
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [assignments]
+      summary: Delete an assignment
+      operationId: deleteAssignment
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/assignments/{assignment_id}/submissions:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/AssignmentId'
+    post:
+      tags: [assignments]
+      summary: Submit work
+      description: |
+        Free text ("I built X, here is how"), a public link (a GitHub repository, a deployed page) or a file. Queues
+        an `assignment-review` job. Submitted code is read and reviewed, never run.
+      operationId: submitAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubmission' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                text: { type: string }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /inbox:
     get:
       tags: [inbox]
@@ -773,6 +1127,21 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]*$' }
+    CourseId:
+      name: course_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]*$' }
+    QuizId:
+      name: quiz_id
+      in: path
+      required: true
+      schema: { type: string }
+    AssignmentId:
+      name: assignment_id
+      in: path
+      required: true
+      schema: { type: string }
     ResourceId:
       name: resource_id
       in: path
@@ -906,7 +1275,8 @@ components:
       properties:
         type:
           type: string
-          enum: [link, pdf, topic]
+          enum: [link, pdf, topic, chapter]
+        course_id: { type: string, description: 'When type is chapter, the course it belongs to' }
         link: { type: string, description: When type is link }
         name: { type: string, description: When type is topic }
         file: { type: string, description: 'When type is pdf, the path inside the topic folder' }
@@ -989,6 +1359,11 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Learning'
             - type: 'null'
+        course:
+          description: Set when this topic is a chapter (or the Prelim) of a course. The topic list includes chapters, marked with `course_id`; Home shows them under their course instead.
+          oneOf:
+            - $ref: '#/components/schemas/ChapterRef'
+            - type: 'null'
         failure_reason: { type: [string, 'null'] }
         summary:
           type: [string, 'null']
@@ -1001,6 +1376,7 @@ components:
       required: [id, title, status, origin, counts, progress, updated]
       properties:
         id: { type: string }
+        course_id: { type: [string, 'null'], description: 'The course this chapter belongs to, if any' }
         title: { type: string }
         status: { $ref: '#/components/schemas/TopicStatus' }
         origin: { $ref: '#/components/schemas/Origin' }
@@ -1189,7 +1565,7 @@ components:
 
     JobKind:
       type: string
-      enum: [enrich, enrich-deep, condense, answer]
+      enum: [enrich, enrich-deep, condense, answer, course-outline, quiz, quiz-grade, assignment, assignment-review]
 
     JobStatus:
       type: string
@@ -1201,11 +1577,13 @@ components:
       properties:
         id: { type: string }
         kind: { $ref: '#/components/schemas/JobKind' }
-        topic_id: { type: string }
+        topic_id:
+          type: string
+          description: The topic the job works on. For course-level jobs (outline, course chat, course quiz) it is the course scope id, `course--<course id>`.
         lane:
           type: string
           enum: [work, chat]
-          description: Work jobs run one at a time; chat runs in its own lane so questions don't wait behind enrichment.
+          description: Work jobs run one at a time; chat (and quiz grading) runs in its own lane so questions don't wait behind enrichment.
         status: { $ref: '#/components/schemas/JobStatus' }
         cli: { $ref: '#/components/schemas/CliId' }
         params:
@@ -1441,6 +1819,484 @@ components:
           properties:
             p256dh: { type: string }
             auth: { type: string }
+
+    ChapterRef:
+      type: object
+      description: A chapter's place in its course. Stored in the course manifest and copied into the chapter's `topic.json`.
+      required: [course_id, kind, order]
+      properties:
+        course_id: { type: string }
+        kind: { type: string, enum: [chapter, prelim] }
+        order: { type: integer, description: 'Position in the course, from 1. The Prelim is 0.' }
+        summary: { type: [string, 'null'], description: One or two sentences on what the chapter covers }
+        prereqs:
+          type: array
+          description: Chapter topic ids. Advisory, never a lock.
+          items: { type: string }
+        teaches:
+          type: array
+          description: Concepts this chapter explains. Added to the person profile when the chapter is marked done.
+          items: { type: string }
+        assumes:
+          type: array
+          description: Concepts the chapter takes for granted. Anything no finished prerequisite covers is asked about.
+          items: { type: string }
+        source_range:
+          description: Where in the course's central resources this chapter's material is.
+          oneOf:
+            - $ref: '#/components/schemas/SourceRange'
+            - type: 'null'
+
+    CourseChapter:
+      type: object
+      description: A chapter as listed in `course.json`. Its `id` is the chapter's topic id.
+      required: [id, title, kind, order, prereqs, teaches, assumes]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        kind: { type: string, enum: [chapter, prelim] }
+        order: { type: integer }
+        summary: { type: [string, 'null'] }
+        prereqs:
+          type: array
+          items: { type: string }
+        teaches:
+          type: array
+          items: { type: string }
+        assumes:
+          type: array
+          items: { type: string }
+        source_range:
+          oneOf:
+            - $ref: '#/components/schemas/SourceRange'
+            - type: 'null'
+
+    SourceRange:
+      type: object
+      required: [label]
+      properties:
+        source: { type: [string, 'null'], description: 'Path of the central resource relative to the course folder (sources/ddia.pdf), a URL, or null when the chapter has no single source' }
+        label: { type: string, description: 'Human text, for example "pp. 17 to 45" or "Chapter 3"' }
+        from: { type: [integer, 'null'], description: First page }
+        to: { type: [integer, 'null'], description: Last page }
+
+    CourseStatus:
+      type: string
+      description: |
+        captured: just added. planning: the outline job is running or waiting for approval. ready: the outline is
+        approved and chapters exist. failed: the outline job failed.
+      enum: [captured, planning, ready, failed, archived]
+
+    Course:
+      type: object
+      description: The course manifest (`course.json`) as the server sees it.
+      required: [id, title, status, origin, chapters, sources, created, updated]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        goal: { type: [string, 'null'], description: Free text from the learner }
+        status: { $ref: '#/components/schemas/CourseStatus' }
+        origin: { $ref: '#/components/schemas/Origin' }
+        summary: { type: [string, 'null'] }
+        chapters:
+          type: array
+          description: In study order, the Prelim first when there is one.
+          items: { $ref: '#/components/schemas/CourseChapter' }
+        sources:
+          type: array
+          description: Central resources, derived from the course's `sources/` folder.
+          items:
+            type: object
+            required: [path, title]
+            properties:
+              path: { type: string, description: Relative to the course folder }
+              title: { type: string }
+              url: { type: [string, 'null'] }
+        failure_reason: { type: [string, 'null'] }
+        session_id: { type: [string, 'null'] }
+        session_cli:
+          oneOf:
+            - $ref: '#/components/schemas/CliId'
+            - type: 'null'
+        created: { type: string }
+        updated: { type: string }
+
+    ChapterState:
+      type: string
+      description: planned (a shell with no pack), building, ready (pack built, not started), in_progress, done.
+      enum: [planned, building, ready, in_progress, done]
+
+    ChapterView:
+      type: object
+      required: [id, title, kind, order, state, topic, prereqs, unmet_prereqs]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        kind: { type: string, enum: [chapter, prelim] }
+        order: { type: integer }
+        summary: { type: [string, 'null'] }
+        state: { $ref: '#/components/schemas/ChapterState' }
+        prereqs:
+          type: array
+          items: { type: string }
+        unmet_prereqs:
+          type: array
+          description: Prerequisite chapter ids that are not done yet. Advisory.
+          items: { type: string }
+        teaches:
+          type: array
+          items: { type: string }
+        source_range:
+          oneOf:
+            - $ref: '#/components/schemas/SourceRange'
+            - type: 'null'
+        topic: { $ref: '#/components/schemas/TopicSummary' }
+
+    CourseSummary:
+      type: object
+      required: [id, title, status, origin, counts, progress, updated]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/CourseStatus' }
+        origin: { $ref: '#/components/schemas/Origin' }
+        summary: { type: [string, 'null'] }
+        counts:
+          type: object
+          required: [chapters, built, done]
+          properties:
+            chapters: { type: integer }
+            built: { type: integer, description: Chapters with a pack }
+            done: { type: integer }
+        progress:
+          type: object
+          required: [fraction]
+          properties:
+            fraction: { type: number, description: 'Chapters done over chapters, 0 to 1' }
+        next_chapter:
+          description: The first chapter not done, in course order.
+          oneOf:
+            - type: object
+              required: [id, title, state]
+              properties:
+                id: { type: string }
+                title: { type: string }
+                state: { $ref: '#/components/schemas/ChapterState' }
+            - type: 'null'
+        failure_reason: { type: [string, 'null'] }
+        active_job:
+          oneOf:
+            - $ref: '#/components/schemas/Job'
+            - type: 'null'
+        updated: { type: string }
+
+    CourseList:
+      type: object
+      required: [courses]
+      properties:
+        courses:
+          type: array
+          items: { $ref: '#/components/schemas/CourseSummary' }
+
+    CourseDetail:
+      type: object
+      required: [course, chapters, jobs, chat_available, estimate]
+      properties:
+        course: { $ref: '#/components/schemas/Course' }
+        chapters:
+          type: array
+          items: { $ref: '#/components/schemas/ChapterView' }
+        jobs:
+          type: array
+          description: Active jobs first (the outline job, chapter builds), then recent finished ones
+          items: { $ref: '#/components/schemas/Job' }
+        chat_available: { type: boolean }
+        chat_unavailable_reason: { type: [string, 'null'] }
+        estimate:
+          type: object
+          description: What building the rest costs, so the learner can choose how many to build.
+          required: [planned_chapters]
+          properties:
+            planned_chapters: { type: integer, description: 'Chapters with no pack yet, each one enrich run' }
+
+    CreateCourse:
+      type: object
+      required: [origin]
+      properties:
+        origin:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [link, topic]
+            link: { type: string, format: uri }
+            name: { type: string, minLength: 2 }
+        title: { type: string }
+        goal: { type: string }
+
+    CourseWithJob:
+      type: object
+      required: [course, job]
+      properties:
+        course: { $ref: '#/components/schemas/Course' }
+        job:
+          oneOf:
+            - $ref: '#/components/schemas/Job'
+            - type: 'null'
+
+    UpdateCourse:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        goal: { type: string }
+        archived: { type: boolean }
+
+    BuildChapters:
+      type: object
+      properties:
+        chapter_ids:
+          type: array
+          items: { type: string }
+        next:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: Build the next N planned chapters in course order
+
+    QuizQuestion:
+      type: object
+      required: [id, type, prompt]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          description: choice is graded on the server; the others by a grading job
+          enum: [choice, short, explain, spot_error]
+        prompt: { type: string, description: Markdown }
+        options:
+          type: array
+          description: For choice questions
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+        concept: { type: [string, 'null'], description: The concept this question tests }
+        section: { type: [string, 'null'], description: 'Pack section id to reread, for the Reader' }
+        chapter_id: { type: [string, 'null'], description: 'In a course quiz, the chapter the question draws from' }
+
+    QuestionResult:
+      type: object
+      required: [score]
+      properties:
+        score: { type: number, description: 0 to 1 }
+        correct: { type: [boolean, 'null'] }
+        feedback: { type: [string, 'null'] }
+        correct_option: { type: [string, 'null'] }
+        explanation: { type: [string, 'null'] }
+
+    QuizAttempt:
+      type: object
+      required: [id, status, created, answers]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [grading, graded, failed] }
+        created: { type: string }
+        answers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              selected: { type: [string, 'null'] }
+              text: { type: [string, 'null'] }
+        results:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/QuestionResult' }
+        score: { type: [number, 'null'], description: '0 to 1 over all questions, null while grading' }
+        weak_concepts:
+          type: array
+          items: { type: string }
+        job_id: { type: [string, 'null'] }
+
+    Quiz:
+      type: object
+      required: [id, title, status, scope, questions, attempts, created]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [generating, ready, failed] }
+        scope: { type: string, description: The topic id or course scope id }
+        focus: { type: [string, 'null'] }
+        failure_reason: { type: [string, 'null'] }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/QuizQuestion' }
+        attempts:
+          type: array
+          items: { $ref: '#/components/schemas/QuizAttempt' }
+        created: { type: string }
+
+    QuizList:
+      type: object
+      required: [quizzes]
+      properties:
+        quizzes:
+          type: array
+          items: { $ref: '#/components/schemas/Quiz' }
+
+    CreateQuiz:
+      type: object
+      properties:
+        count: { type: integer, minimum: 3, maximum: 20, default: 8 }
+        focus: { type: string, description: A concept or section to concentrate on }
+        chapter_ids:
+          type: array
+          description: For a course quiz, limit it to these chapters. Default is every finished chapter.
+          items: { type: string }
+
+    QuizWithJob:
+      type: object
+      required: [quiz, job]
+      properties:
+        quiz: { $ref: '#/components/schemas/Quiz' }
+        job: { $ref: '#/components/schemas/Job' }
+
+    SubmitAttempt:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              selected: { type: [string, 'null'] }
+              text: { type: [string, 'null'] }
+
+    AssignmentBrief:
+      type: object
+      required: [title, task]
+      properties:
+        title: { type: string }
+        summary: { type: [string, 'null'] }
+        task: { type: string, description: Markdown }
+        constraints:
+          type: array
+          items: { type: string }
+        acceptance:
+          type: array
+          items:
+            type: object
+            required: [id, text]
+            properties:
+              id: { type: string }
+              text: { type: string }
+        stretch: { type: [string, 'null'] }
+        estimate: { type: [string, 'null'], description: 'For example "2 to 3 hours"' }
+        grounded_in: { type: [string, 'null'], description: One line on how the learner's context shaped the task }
+
+    CriterionReview:
+      type: object
+      required: [id, met]
+      properties:
+        id: { type: string }
+        met: { type: string, enum: [yes, partly, no] }
+        feedback: { type: [string, 'null'] }
+
+    Review:
+      type: object
+      required: [summary, criteria]
+      properties:
+        summary: { type: string }
+        criteria:
+          type: array
+          items: { $ref: '#/components/schemas/CriterionReview' }
+        next_steps:
+          type: array
+          items: { type: string }
+        pointers:
+          type: array
+          description: Where to reread what was missed
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string }
+              section: { type: [string, 'null'] }
+
+    Submission:
+      type: object
+      required: [id, kind, status, created]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [text, link, file] }
+        text: { type: [string, 'null'] }
+        link: { type: [string, 'null'] }
+        file: { type: [string, 'null'], description: Path relative to the topic folder }
+        status: { type: string, enum: [submitted, reviewing, reviewed, failed] }
+        review:
+          oneOf:
+            - $ref: '#/components/schemas/Review'
+            - type: 'null'
+        job_id: { type: [string, 'null'] }
+        created: { type: string }
+
+    Assignment:
+      type: object
+      required: [id, title, status, submissions, created]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [briefing, open, failed] }
+        failure_reason: { type: [string, 'null'] }
+        context:
+          description: What the learner gave to make the task relevant, or null for a generic task.
+          oneOf:
+            - type: object
+              properties:
+                text: { type: [string, 'null'] }
+                link: { type: [string, 'null'] }
+                file: { type: [string, 'null'] }
+            - type: 'null'
+        brief:
+          oneOf:
+            - $ref: '#/components/schemas/AssignmentBrief'
+            - type: 'null'
+        submissions:
+          type: array
+          items: { $ref: '#/components/schemas/Submission' }
+        job_id: { type: [string, 'null'] }
+        created: { type: string }
+
+    AssignmentList:
+      type: object
+      required: [assignments]
+      properties:
+        assignments:
+          type: array
+          items: { $ref: '#/components/schemas/Assignment' }
+
+    CreateAssignment:
+      type: object
+      properties:
+        context_text: { type: string }
+        context_link: { type: string, format: uri }
+        focus: { type: string }
+
+    AssignmentWithJob:
+      type: object
+      required: [assignment, job]
+      properties:
+        assignment: { $ref: '#/components/schemas/Assignment' }
+        job: { $ref: '#/components/schemas/Job' }
+
+    CreateSubmission:
+      type: object
+      properties:
+        text: { type: string }
+        link: { type: string, format: uri }
 
     EventType:
       type: string

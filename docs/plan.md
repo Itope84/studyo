@@ -136,5 +136,33 @@ Check: done for chat in replay (e2e test 2) and real CLIs. The reply is saved as
 
 Check: not done. Push on an iPhone and the wide layouts are the open items.
 
+### 8. Chat skill rework (applies to topics, chapters and courses)
+The `answer` skill is not good enough yet. It is strictly pack-only and read-only. Questions to settle, then fix, before courses add more scopes:
+Raw problem statement from the user (Oct 3, 2026), kept verbatim:
+
+> Chat is currently useless. We need to remove that "from file only" restriction. Yes allow it to "enrich more". But mainly we need it to answer questions, but it can't just be by quoting stuff. It's explaining stuff. If it doesn't know it, it can research it and come back to explain it - either that or we allow it to explain from knowledge. It has a lot of knowledge but models are different so maybe enriching is what matters. It spews nonsense sometimes because it's trying to answer from the file. For example when it has a document it should be able to understand and explain when I ask a question from knowledge that can be inferred. You can say use knowledge as last resort but not blocked.
+
+Direction: not "pack only". Explain, don't quote. Order: pack and sources first, then inference from what the document implies, then research (web) and come back to explain, then model knowledge as a last resort, labelled but never blocked. Keep the "enrich more" offer. Not started; separate skill work.
+
+- [x] Collect what felt bad in real use (the statement above)
+- [ ] Teach, don't only retrieve: allow explaining a covered idea differently, a worked example, checking understanding
+- [ ] Use the profile and reading position ("you are in section X")
+- [ ] Decide how strict "pack only" is when the pack misses a basic fact (offer enrich, or answer labelled as outside the sources)
+- [ ] Scopes: topic, chapter (falls back to earlier chapters), course (routes via `index.md`)
+- [ ] Verify with both CLIs and the replay adapter
+
+### 9. Courses (brief: `docs/courses-brief.md`; open concerns there come first)
+- [ ] Answer open concerns, then Stitch screens
+- [ ] Contract: Course schema, chapter fields, endpoints, job kinds; update `topic-folder.md`
+- [ ] Skills: `course-outline`, `course-plan`, course params for `enrich-document`, `enrich-topic`, `level-check`, `condense`
+- [ ] Server: course scanner, outline job with `needs_input` approval, lazy chapter builds, "build next N"
+- [ ] App: Courses on Home, add course, outline review, course home, chapter banner
+- [ ] Prelim chapter from course-level gaps
+- [ ] Course chat (with chat rework above)
+
+### 10. Quizzes and take-home (topics, chapters, courses; user triggered)
+- [ ] `quiz` skill and job kinds; quiz runner, results, attempts in `progress.json`
+- [ ] `assignment` skill: optional context input (own project, work situation, or none for a generic task), brief, submission (file, link, text), review. No code execution in v1.
+
 ## Not in this plan
 Android offline downloads and background audio (brief step 4), the share menu, Android Auto. These follow once the web app works end to end.

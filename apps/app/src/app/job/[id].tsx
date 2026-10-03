@@ -1,9 +1,11 @@
 import type { AnswerSet, LogLine, Question, QuestionSet } from '@studyo/api';
+import { courseIdOf, isCourseScope } from '@studyo/api';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Check, Input } from '@/components/inputs';
 import { jobLabel } from '@/components/JobPanel';
+import { Markdown } from '@/components/Markdown';
 import { Pulse } from '@/components/status';
 import {
   Badge,
@@ -19,15 +21,19 @@ import {
   timeAgo,
 } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
-import { useJob, useOnline, useTopic } from '@/lib/hooks';
+import { useCourse, useJob, useOnline, useTopic } from '@/lib/hooks';
 import { keys, queryClient } from '@/lib/query';
+import { scopeHref } from '@/lib/scope';
 import { fonts, radius, space, useTheme } from '@/theme';
 
 /** One job: its questions when it is waiting, and its live log. */
 export default function JobScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const job = useJob(id);
-  const topic = useTopic(job.data?.topic_id ?? '');
+  const scope = job.data?.topic_id ?? '';
+  const topic = useTopic(isCourseScope(scope) ? '' : scope);
+  const course = useCourse(isCourseScope(scope) ? courseIdOf(scope) : '');
+  const subtitle = isCourseScope(scope) ? course.data?.course.title : topic.data?.topic.title;
   const { online } = useOnline();
   const [showAll, setShowAll] = useState(false);
 
@@ -61,7 +67,7 @@ export default function JobScreen() {
     : j.log.filter((l) => l.kind === 'progress' || l.kind === 'tool' || l.kind === 'system');
 
   return (
-    <Screen header={<Header title={jobLabel(j)} subtitle={topic.data?.topic.title} />}>
+    <Screen header={<Header title={jobLabel(j)} subtitle={subtitle} />}>
       <View style={{ paddingTop: space.lg, gap: space.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Badge kind={status.kind} label={status.label} />
@@ -81,9 +87,9 @@ export default function JobScreen() {
         ) : null}
         {j.status === 'succeeded' ? (
           <Button
-            label="Open the topic"
+            label={isCourseScope(j.topic_id) ? 'Open the course' : 'Open the topic'}
             icon="arrow-forward"
-            onPress={() => router.replace(`/topic/${j.topic_id}`)}
+            onPress={() => router.replace(scopeHref(j.topic_id))}
             style={{ marginTop: space.sm }}
           />
         ) : null}
@@ -201,7 +207,7 @@ function QuestionForm({
       await api.answer(jobId, { question_set_id: set.id, answers: skip ? {} : answers });
       await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
       await queryClient.invalidateQueries({ queryKey: keys.job(jobId) });
-      router.replace(`/topic/${topicId}`);
+      router.replace(scopeHref(topicId));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
     } finally {
@@ -226,11 +232,7 @@ function QuestionForm({
           Studyo has a question
         </T>
         <T variant="title">{set.title ?? 'Before it continues'}</T>
-        {set.intro ? (
-          <T variant="bodySmall" tone="lead">
-            {set.intro}
-          </T>
-        ) : null}
+        {set.intro ? <Markdown text={set.intro} topicId={topicId} /> : null}
       </View>
       {set.questions.map((q) => (
         <QuestionField
@@ -258,7 +260,11 @@ function QuestionForm({
       />
       <Button
         kind="ghost"
-        label="Skip, assume I'm new to all of it"
+        label={
+          set.questions.some((q) => q.id === 'decision')
+            ? 'Skip, use it as it is'
+            : "Skip, assume I'm new to all of it"
+        }
         onPress={() => void submit(true)}
         disabled={!online || busy}
       />

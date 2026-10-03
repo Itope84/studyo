@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { CliId } from '@studyo/api';
 import type { AdapterEvent, CliAdapter, RunRequest } from './types.ts';
 
@@ -50,9 +50,9 @@ export function replayAdapter(dir: string, id: CliId = 'claude'): CliAdapter {
         if (req.signal.aborted) return { exitCode: null, sessionId, cancelled: true };
         if ('event' in step) onEvent(step.event);
         else if ('write' in step) {
-          const path = join(meta.topicPath, step.write.path);
+          const path = join(meta.topicPath, fill(step.write.path, meta));
           mkdirSync(dirname(path), { recursive: true });
-          writeFileSync(path, step.write.content);
+          writeFileSync(path, fill(step.write.content, meta));
         } else if ('manifest' in step) {
           const path = join(meta.topicPath, 'topic.json');
           const manifest = JSON.parse(readFileSync(path, 'utf8'));
@@ -65,6 +65,14 @@ export function replayAdapter(dir: string, id: CliId = 'claude'): CliAdapter {
       return { exitCode: script.exitCode ?? 0, sessionId, cancelled: false };
     },
   };
+}
+
+/** Placeholders in replay files: `{{dir}}` (the folder's name), `{{now}}` and `{{params.<name>}}`. */
+function fill(text: string, meta: NonNullable<RunRequest['meta']>): string {
+  return text
+    .replaceAll('{{dir}}', basename(meta.topicPath))
+    .replaceAll('{{now}}', new Date().toISOString())
+    .replace(/\{\{params\.([a-z_]+)\}\}/g, (_m, k: string) => String(meta.params?.[k] ?? ''));
 }
 
 function sleep(ms: number, signal: AbortSignal) {

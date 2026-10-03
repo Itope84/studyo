@@ -4,22 +4,38 @@ import { basename, extname, join } from 'node:path';
 import type {
   AnswerSet,
   AssignInbox,
+  Assignment,
+  AssignmentList,
+  BuildChapters,
   ChatHistory,
   CliId,
+  CourseDetail,
+  CourseList,
+  CourseWithJob,
+  CreateAssignment,
   CreateBookmark,
+  CreateCourse,
   CreateJob,
+  CreateQuiz,
+  CreateSubmission,
   CreateTopic,
   Job,
+  JobKind,
   Profile,
   ProgressUpdate,
   PushSubscription,
+  QuizList,
+  QuizWithJob,
   ServerInfo,
   Settings,
+  SubmitAttempt,
   TopicDetail,
   TopicList,
   TopicWithJob,
+  UpdateCourse,
   UpdateTopic,
 } from '@studyo/api';
+import { courseIdOf, courseScope, isCourseScope } from '@studyo/api';
 import { writeSharedAssets } from '@studyo/renderer';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -30,6 +46,7 @@ import { replayAdapter } from './adapters/replay.ts';
 import type { CliAdapter } from './adapters/types.ts';
 import { ChatStore } from './chat.ts';
 import { type Config, VERSION } from './config.ts';
+import { Courses, summariseCourse } from './courses.ts';
 import { openDb } from './db.ts';
 import { EventBus } from './events.ts';
 import { serveFile } from './files.ts';
@@ -38,10 +55,12 @@ import { Runner } from './jobs/runner.ts';
 import { type JobRecord, JobStore, publicJob } from './jobs/store.ts';
 import { Library, mediaTypeFor, titleFromFilename } from './library.ts';
 import { closePdfBrowser, ensurePdf } from './pdf.ts';
+import { pdfHasText } from './pdfcheck.ts';
 import { markRead, readProfile, writeProfile } from './profile.ts';
 import { Push } from './push.ts';
 import { ensureRendered } from './render.ts';
 import { SettingsStore } from './settings.ts';
+import { Study } from './study.ts';
 import {
   badRequest,
   conflict,
@@ -73,6 +92,8 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   const bus = new EventBus(db);
   const store = new JobStore(db, bus);
   const chat = new ChatStore((id) => library.topicDir(id));
+  const courses = new Courses(library);
+  const study = new Study(library);
   const adapters: Record<CliId, CliAdapter> = config.replayDir
     ? {
         claude: replayAdapter(config.replayDir, 'claude'),
@@ -94,6 +115,8 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     store,
     bus,
     chat,
+    courses,
+    study,
     adapters,
     settings: () => settings.get(),
     notify: (job, topic) => void push.notifyJob(job, topic),
@@ -315,11 +338,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return { topic: await library.readTopic(topicId, { persist: true }), job };
   }
 
-  function enqueue(
-    topicId: string,
-    kind: CreateJob['kind'] | 'answer',
-    params: Record<string, unknown>,
-  ): JobRecord {
+  function enqueue(topicId: string, kind: JobKind, params: Record<string, unknown>): JobRecord {
     const job = store.create({ topic_id: topicId, kind, cli: settings.get().cli, params });
     runner.kick();
     return job;
@@ -430,7 +449,11 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   app.post('/topics/:id/mark-read', async (c) => {
     const id = c.req.param('id');
     const topic = await library.readTopic(id, { persist: false });
-    const profile = markRead(config.library, id, topic.learning?.gaps ?? []);
+    const profile = markRead(
+      config.library,
+      id,
+      topic.course?.teaches?.length ? topic.course.teaches : (topic.learning?.gaps ?? []),
+    );
     return c.json(profile);
   });
 
@@ -581,9 +604,28 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
 
   // ---- Chat -----------------------------------------------------------------
 
+  const BUSY: Partial<Record<JobKind, string>> = {
+    condense: 'Writing a condensed doc…',
+    quiz: 'Writing a quiz…',
+    assignment: 'Writing a take-home…',
+    'assignment-review': 'Reviewing your submission…',
+  };
+
   const chatAvailability = async (
     id: string,
   ): Promise<{ available: boolean; reason: string | null }> => {
+    if (isCourseScope(id)) {
+      const course = await courses.readManifest(courseIdOf(id));
+      const work = store.activeWork(id);
+      if (work?.status === 'needs_input')
+        return { available: false, reason: 'Approve the outline first; it holds this course.' };
+      if (work) return { available: false, reason: 'Planning the course…' };
+      if (course.status !== 'ready')
+        return { available: false, reason: 'The course has no outline yet.' };
+      if (!detected[settings.get().cli]?.installed)
+        return { available: false, reason: 'The selected CLI is not installed.' };
+      return { available: true, reason: null };
+    }
     const topic = await library.readTopic(id, { persist: false });
     const work = store.activeWork(id);
     if (work?.status === 'needs_input')
@@ -591,7 +633,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     if (work)
       return {
         available: false,
-        reason: work.kind === 'condense' ? 'Writing a condensed doc…' : 'Enriching…',
+        reason: BUSY[work.kind] ?? 'Enriching…',
       };
     if (
       !topic.resources.some(
@@ -631,6 +673,405 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     bus.emit('chat.message', { topic_id: id, message: turn.user });
     bus.emit('chat.message', { topic_id: id, message: assistant });
     return c.json({ user: turn.user, assistant, job: publicJob(job) }, 202);
+  });
+
+  // ---- Courses --------------------------------------------------------------
+
+  const activeJobOf = (scope: string): Job | null => {
+    const j = store.activeWork(scope);
+    return j ? publicJob(j) : null;
+  };
+
+  async function chaptersOf(courseId: string) {
+    return courses.chapterViews(
+      courseId,
+      (tid) => activeJobOf(tid),
+      (tid, job) => library.summary(tid, job),
+    );
+  }
+
+  async function courseDetail(courseId: string): Promise<CourseDetail> {
+    const scope = courseScope(courseId);
+    const course = await courses.readCourse(courseId);
+    const views = await chaptersOf(courseId);
+    const active = [
+      ...store.list({ active: true, topic_id: scope, limit: 10 }),
+      ...views.flatMap((v) => (v.topic.active_job ? [store.get(v.topic.active_job.id)] : [])),
+    ].filter((j): j is JobRecord => !!j);
+    const recent = store
+      .list({ topic_id: scope, limit: 10 })
+      .filter((j) => !active.some((a) => a.id === j.id))
+      .slice(0, 5);
+    const chat = await chatAvailability(scope);
+    return {
+      course,
+      chapters: views,
+      jobs: [...active, ...recent].map(publicJob),
+      chat_available: chat.available,
+      chat_unavailable_reason: chat.reason,
+      estimate: { planned_chapters: views.filter((v) => v.state === 'planned').length },
+    };
+  }
+
+  const requireCli = () => {
+    if (!detected[settings.get().cli]?.installed) {
+      throw conflict(
+        `${settings.get().cli} is not installed on the server. Pick another CLI in Settings.`,
+      );
+    }
+  };
+
+  app.get('/courses', async (c) => {
+    const includeArchived = c.req.query('include_archived') === 'true';
+    const list: CourseList = { courses: [] };
+    for (const id of await library.courseIds()) {
+      try {
+        const course = await courses.readCourse(id);
+        if (course.status === 'archived' && !includeArchived) continue;
+        list.courses.push(
+          summariseCourse(course, await chaptersOf(id), activeJobOf(courseScope(id))),
+        );
+      } catch (e) {
+        console.warn(`Skipping course ${id}: ${(e as Error).message}`);
+      }
+    }
+    list.courses.sort((a, b) => b.updated.localeCompare(a.updated));
+    return c.json(list);
+  });
+
+  app.post('/courses', async (c) => {
+    const type = c.req.header('Content-Type') ?? '';
+    let manifest: Awaited<ReturnType<Courses['create']>>;
+    if (type.startsWith('multipart/form-data')) {
+      const form = await c.req.parseBody();
+      const file = form.file;
+      if (!(file instanceof File)) throw badRequest('Attach a PDF as "file".');
+      if (extname(file.name).toLowerCase() !== '.pdf')
+        throw badRequest('Only a PDF can start a course from a file.');
+      if (file.size > MAX_UPLOAD) throw new HttpError(413, 'too_large', 'That file is too large.');
+      const title = String(form.title || '').trim() || titleFromFilename(file.name);
+      const safeName = `S1-${slugify(basename(file.name, '.pdf'))}.pdf`;
+      manifest = await courses.create({
+        title,
+        goal: String(form.goal || '').trim() || null,
+        origin: { type: 'pdf', file: `sources/${safeName}` },
+      });
+      const dest = join(library.courseDir(manifest.id), 'sources', safeName);
+      writeFileSync(dest, Buffer.from(await file.arrayBuffer()));
+      if ((await pdfHasText(dest)) === false) {
+        await courses.setStatus(
+          manifest.id,
+          'failed',
+          'This PDF is scanned (pictures of pages with no text), so Studyo cannot read its structure yet.',
+        );
+        bus.emit('topic.updated', { topic_id: courseScope(manifest.id) });
+        const out: CourseWithJob = { course: await courses.readCourse(manifest.id), job: null };
+        return c.json(out, 201);
+      }
+    } else {
+      const body = await json<CreateCourse>(c);
+      const origin = body.origin;
+      const goal = body.goal?.trim() || null;
+      if (origin?.type === 'link') {
+        let url: URL;
+        try {
+          url = new URL(String(origin.link));
+        } catch {
+          throw badRequest('That link is not a valid URL.');
+        }
+        if (!/^https?:$/.test(url.protocol))
+          throw badRequest('Links must start with http or https.');
+        manifest = await courses.create({
+          title: body.title?.trim() || prettyLinkTitle(url),
+          goal,
+          origin: { type: 'link', link: url.href },
+        });
+      } else if (origin?.type === 'topic') {
+        const name = String(origin.name ?? '').trim();
+        if (name.length < 2) throw badRequest('Give the course a subject.');
+        manifest = await courses.create({
+          title: body.title?.trim() || name,
+          goal,
+          origin: { type: 'topic', name },
+        });
+      } else {
+        throw badRequest('origin.type must be link or topic (use multipart for a PDF).');
+      }
+    }
+    const job = publicJob(enqueue(courseScope(manifest.id), 'course-outline', {}));
+    bus.emit('topic.updated', { topic_id: courseScope(manifest.id) });
+    const out: CourseWithJob = { course: await courses.readCourse(manifest.id), job };
+    return c.json(out, 201);
+  });
+
+  const requireCourse = (id: string) => {
+    if (!library.courseExists(id)) throw notFound('Course');
+    return id;
+  };
+
+  app.get('/courses/:id', async (c) =>
+    c.json(await courseDetail(requireCourse(c.req.param('id')))),
+  );
+
+  app.patch('/courses/:id', async (c) => {
+    const id = requireCourse(c.req.param('id'));
+    const body = await json<UpdateCourse>(c);
+    const m = await courses.readManifest(id);
+    if (body.title !== undefined) {
+      if (!body.title.trim()) throw badRequest('The title cannot be empty.');
+      m.title = body.title.trim();
+    }
+    if (body.goal !== undefined) m.goal = body.goal.trim() || null;
+    if (body.archived === true) m.status = 'archived';
+    if (body.archived === false && m.status === 'archived')
+      m.status = m.chapters.length ? 'ready' : 'captured';
+    m.updated = nowIso();
+    courses.writeManifest(id, m);
+    bus.emit('topic.updated', { topic_id: courseScope(id) });
+    return c.json(await courses.readCourse(id));
+  });
+
+  app.post('/courses/:id/outline', async (c) => {
+    const id = requireCourse(c.req.param('id'));
+    const scope = courseScope(id);
+    const m = await courses.readManifest(id);
+    if (store.activeWork(scope)) throw conflict('The outline is already being made.');
+    if (m.status === 'ready' || m.chapters.length)
+      throw conflict('This course already has an approved outline.');
+    requireCli();
+    const job = enqueue(scope, 'course-outline', {});
+    return c.json(publicJob(job), 202);
+  });
+
+  app.post('/courses/:id/build', async (c) => {
+    const id = requireCourse(c.req.param('id'));
+    const body = await json<BuildChapters>(c);
+    const m = await courses.readManifest(id);
+    if (m.status !== 'ready') throw conflict('Approve the outline before building chapters.');
+    requireCli();
+    const views = await chaptersOf(id);
+    let targets = views.filter((v) => v.state === 'planned');
+    if (body.chapter_ids?.length) {
+      const want = new Set(body.chapter_ids);
+      targets = views.filter((v) => want.has(v.id) && v.state === 'planned');
+    } else if (body.next) {
+      targets = targets.slice(0, Math.min(20, Math.max(1, Math.floor(body.next))));
+    } else {
+      throw badRequest('Give chapter_ids or next.');
+    }
+    const jobs = targets
+      .filter((v) => !store.activeWork(v.id))
+      .map((v) => publicJob(enqueue(v.id, 'enrich', {})));
+    if (!jobs.length)
+      throw conflict('Nothing to build: those chapters are built or already queued.');
+    for (const j of jobs) bus.emit('topic.updated', { topic_id: j.topic_id });
+    return c.json({ jobs }, 202);
+  });
+
+  app.post('/courses/:id/chapters/:chapter/complete', async (c) => {
+    const id = requireCourse(c.req.param('id'));
+    const chapter = (await courses.readManifest(id)).chapters.find(
+      (x) => x.id === c.req.param('chapter'),
+    );
+    if (!chapter) throw notFound('Chapter');
+    const { done } = await json<{ done: boolean }>(c);
+    const topic = await library.readTopic(chapter.id, { persist: false });
+    const pack = topic.resources.find((r) => r.type === 'pack');
+    if (!pack) throw conflict('This chapter has no pack to mark.');
+    const progress = await library.readProgress(chapter.id);
+    const prev = progress.items[pack.id];
+    const now = nowIso();
+    progress.items[pack.id] = {
+      position: done ? 1 : (prev?.position ?? 0),
+      duration: prev?.duration ?? null,
+      section: prev?.section ?? null,
+      done: !!done,
+      updated: now,
+    };
+    if (!progress.last || progress.last.updated <= now)
+      progress.last = { resource_id: pack.id, updated: now };
+    library.writeProgress(chapter.id, progress);
+    if (done) markRead(config.library, chapter.id, chapter.teaches);
+    bus.emit('topic.updated', { topic_id: chapter.id });
+    return c.json(await courseDetail(id));
+  });
+
+  // ---- Quizzes --------------------------------------------------------------
+
+  const requireScope = async (id: string) => {
+    if (!(await library.exists(id))) throw notFound(isCourseScope(id) ? 'Course' : 'Topic');
+    return id;
+  };
+
+  app.get('/topics/:id/quizzes', async (c) => {
+    const id = await requireScope(c.req.param('id'));
+    const body: QuizList = { quizzes: await study.listQuizzes(id) };
+    return c.json(body);
+  });
+
+  app.post('/topics/:id/quizzes', async (c) => {
+    const id = await requireScope(c.req.param('id'));
+    const body = await json<CreateQuiz>(c);
+    if (store.activeWork(id)) throw conflict('Wait for the current job on this topic to finish.');
+    if (isCourseScope(id)) {
+      const views = await chaptersOf(courseIdOf(id));
+      if (!views.some((v) => v.state !== 'planned' && v.state !== 'building'))
+        throw conflict('Build at least one chapter before a course quiz.');
+    } else {
+      const topic = await library.readTopic(id, { persist: false });
+      if (!topic.resources.some((r) => r.type === 'pack' || r.type === 'condensed'))
+        throw conflict('This topic has no pack yet. Enrich it first.');
+    }
+    requireCli();
+    const count = Math.min(20, Math.max(3, Math.floor(body.count ?? 8)));
+    const focus = body.focus?.trim() || null;
+    const quiz = study.startQuiz(id, { focus });
+    const job = enqueue(id, 'quiz', {
+      quiz_id: quiz.id,
+      count,
+      focus,
+      chapter_ids: body.chapter_ids ?? [],
+    });
+    bus.emit('topic.updated', { topic_id: id });
+    const out: QuizWithJob = { quiz, job: publicJob(job) };
+    return c.json(out, 202);
+  });
+
+  app.get('/topics/:id/quizzes/:qid', async (c) => {
+    const id = await requireScope(c.req.param('id'));
+    return c.json(await study.getQuiz(id, c.req.param('qid')));
+  });
+
+  app.delete('/topics/:id/quizzes/:qid', async (c) => {
+    const id = await requireScope(c.req.param('id'));
+    study.deleteQuiz(id, c.req.param('qid'));
+    bus.emit('topic.updated', { topic_id: id });
+    return c.body(null, 204);
+  });
+
+  app.post('/topics/:id/quizzes/:qid/attempts', async (c) => {
+    const id = await requireScope(c.req.param('id'));
+    const qid = c.req.param('qid');
+    const body = await json<SubmitAttempt>(c);
+    if (!body.answers || typeof body.answers !== 'object')
+      throw badRequest('answers are required.');
+    const { attempt, needsGrading } = await study.addAttempt(id, qid, body);
+    if (needsGrading) {
+      requireCli();
+      const job = enqueue(id, 'quiz-grade', { quiz_id: qid, attempt_id: attempt.id });
+      await study.setAttemptJob(id, qid, attempt.id, job.id);
+      attempt.job_id = job.id;
+    }
+    bus.emit('topic.updated', { topic_id: id });
+    return c.json(attempt, 201);
+  });
+
+  // ---- Take-home ------------------------------------------------------------
+
+  const requireTopic = async (id: string) => {
+    if (isCourseScope(id)) throw badRequest('Take-home work belongs to a topic or chapter.');
+    if (!(await library.exists(id))) throw notFound('Topic');
+    return id;
+  };
+
+  const publicLink = (raw: unknown): string | null => {
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+    let url: URL;
+    try {
+      url = new URL(text);
+    } catch {
+      throw badRequest('That link is not a valid URL.');
+    }
+    if (!/^https?:$/.test(url.protocol)) throw badRequest('Links must start with http or https.');
+    return url.href;
+  };
+
+  const readUpload = async (file: unknown) => {
+    if (!(file instanceof File) || !file.size) return null;
+    if (file.size > MAX_UPLOAD) throw new HttpError(413, 'too_large', 'That file is too large.');
+    return { name: file.name, data: Buffer.from(await file.arrayBuffer()) };
+  };
+
+  app.get('/topics/:id/assignments', async (c) => {
+    const id = await requireTopic(c.req.param('id'));
+    const body: AssignmentList = { assignments: await study.listAssignments(id) };
+    return c.json(body);
+  });
+
+  app.post('/topics/:id/assignments', async (c) => {
+    const id = await requireTopic(c.req.param('id'));
+    let text: string | null = null;
+    let link: string | null = null;
+    let focus: string | null = null;
+    let file: Awaited<ReturnType<typeof readUpload>> = null;
+    if ((c.req.header('Content-Type') ?? '').startsWith('multipart/form-data')) {
+      const form = await c.req.parseBody();
+      text = String(form.context_text ?? '').trim() || null;
+      link = publicLink(form.context_link);
+      file = await readUpload(form.context_file);
+    } else {
+      const body = await json<CreateAssignment>(c);
+      text = body.context_text?.trim() || null;
+      link = publicLink(body.context_link);
+      focus = body.focus?.trim() || null;
+    }
+    if (store.activeWork(id)) throw conflict('Wait for the current job on this topic to finish.');
+    const topic = await library.readTopic(id, { persist: false });
+    if (!topic.resources.some((r) => r.type === 'pack' || r.type === 'condensed'))
+      throw conflict('This topic has no pack yet. Enrich it first.');
+    requireCli();
+    const assignment = await study.createAssignment(id, { text, link, file });
+    const job = enqueue(id, 'assignment', { assignment_id: assignment.id, focus });
+    assignment.job_id = job.id;
+    await study.patchAssignment(id, assignment.id, (a) => {
+      a.job_id = job.id;
+    });
+    bus.emit('topic.updated', { topic_id: id });
+    return c.json({ assignment, job: publicJob(job) }, 202);
+  });
+
+  app.get('/topics/:id/assignments/:aid', async (c) => {
+    const id = await requireTopic(c.req.param('id'));
+    return c.json(await study.getAssignment(id, c.req.param('aid')));
+  });
+
+  app.delete('/topics/:id/assignments/:aid', async (c) => {
+    const id = await requireTopic(c.req.param('id'));
+    study.deleteAssignment(id, c.req.param('aid'));
+    bus.emit('topic.updated', { topic_id: id });
+    return c.body(null, 204);
+  });
+
+  app.post('/topics/:id/assignments/:aid/submissions', async (c) => {
+    const id = await requireTopic(c.req.param('id'));
+    const aid = c.req.param('aid');
+    let text: string | null = null;
+    let link: string | null = null;
+    let file: Awaited<ReturnType<typeof readUpload>> = null;
+    if ((c.req.header('Content-Type') ?? '').startsWith('multipart/form-data')) {
+      const form = await c.req.parseBody();
+      text = String(form.text ?? '').trim() || null;
+      file = await readUpload(form.file);
+    } else {
+      const body = await json<CreateSubmission>(c);
+      text = body.text?.trim() || null;
+      link = publicLink(body.link);
+    }
+    if (!text && !link && !file)
+      throw badRequest(
+        'Add some text, a link or a file. "I did it, here is what I built" is fine.',
+      );
+    requireCli();
+    const { submission } = await study.addSubmission(id, aid, { text, link, file });
+    const job = enqueue(id, 'assignment-review', {
+      assignment_id: aid,
+      submission_id: submission.id,
+    });
+    await study.setSubmissionJob(id, aid, submission.id, job.id);
+    bus.emit('topic.updated', { topic_id: id });
+    const out: Assignment = await study.getAssignment(id, aid);
+    return c.json(out, 202);
   });
 
   // ---- Inbox ----------------------------------------------------------------

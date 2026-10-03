@@ -51,6 +51,33 @@ export function watchLibrary(library: Library, bus: EventBus, store: JobStore): 
   }
   try {
     watchers.push(
+      watch(library.coursesDir, { recursive: true }, (_event, file) => {
+        if (!file) return;
+        const parts = file.toString().split(/[\\/]/);
+        const courseId = parts[0];
+        const rest = parts.slice(1).join('/');
+        if (
+          !courseId ||
+          rest.startsWith('chat/') ||
+          rest.startsWith('_job/') ||
+          rest.includes('/_work/')
+        )
+          return;
+        if (rest.endsWith('.tmp')) return;
+        const scope = `course--${courseId}`;
+        const quiet = store.activeWork(scope)?.status === 'running';
+        debounce(
+          `c:${courseId}`,
+          () => bus.emit('topic.updated', { topic_id: scope }),
+          quiet ? 3000 : 600,
+        );
+      }),
+    );
+  } catch {
+    // No courses folder yet; it is created with the first course.
+  }
+  try {
+    watchers.push(
       watch(library.inboxDir, () => debounce('inbox', () => bus.emit('inbox.updated', {}))),
     );
   } catch (e) {

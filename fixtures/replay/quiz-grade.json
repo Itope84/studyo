@@ -1,0 +1,14 @@
+{
+  "steps": [
+    {
+      "delay": 200,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "{\"results\": {\"q2\": {\"score\": 1, \"feedback\": \"Right: each level adds one hash.\"}, \"q3\": {\"score\": 0.5, \"feedback\": \"Close. Say what the root commits to.\"}}, \"weak_concepts\": [\"merkle tree\"]}",
+        "error": null,
+        "costUsd": 0.01
+      }
+    }
+  ]
+}

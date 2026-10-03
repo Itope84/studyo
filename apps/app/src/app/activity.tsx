@@ -1,4 +1,5 @@
 import type { Job } from '@studyo/api';
+import { courseScope } from '@studyo/api';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -20,7 +21,7 @@ import {
   T,
   timeAgo,
 } from '@/components/ui';
-import { useAllJobs, useTopics } from '@/lib/hooks';
+import { useAllJobs, useCourses, useTopics } from '@/lib/hooks';
 import { space } from '@/theme';
 
 const STATUS: Record<Job['status'], { kind: BadgeKind; label: string }> = {
@@ -36,8 +37,12 @@ const STATUS: Record<Job['status'], { kind: BadgeKind; label: string }> = {
 export default function Activity() {
   const jobs = useAllJobs();
   const topics = useTopics();
+  const courses = useCourses();
   const [show, setShow] = useState<'builds' | 'all'>('builds');
-  const titles = new Map((topics.data?.topics ?? []).map((t) => [t.id, t.title]));
+  const titles = new Map<string, string>([
+    ...(topics.data?.topics ?? []).map((t) => [t.id, t.title] as const),
+    ...(courses.data?.courses ?? []).map((c) => [courseScope(c.id), c.title] as const),
+  ]);
 
   const list = (jobs.data?.jobs ?? []).filter((j) => show === 'all' || j.lane === 'work');
   const waiting = list.filter((j) => j.status === 'needs_input');

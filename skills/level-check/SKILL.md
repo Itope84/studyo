@@ -66,6 +66,14 @@ Free text: background, role, how they like things explained, what to avoid. Writ
    - Write `learning` in `topic.json`: `{"goal": "...", "gaps": ["..."], "updated": "YYYY-MM-DD"}`. `gaps` are the concepts not known, ordered by how much they block understanding, with a short note on what each builds on.
    - Print `[studyo] level-check: <n> known, <m> gaps`.
 
+## Course modes
+
+Two extra modes for courses (see `../_shared/course-folder.md`). Everything above applies unless this section changes it.
+
+**Course mode** (called by `course-outline`, with `course_path`): `terms` is the union of the chapters' `assumes`. The goal is the course `goal`. In step 5 write `learning` (`goal`, `gaps`, `updated`) into `course.json`, not into a topic. The gaps become the Prelim. Ask in the same single batch question, and keep it short: group by "the course assumes", skip anything the profile covers.
+
+**Chapter mode** (called by `enrich-chapter`, with `course_path` and a chapter): `terms` is the chapter's `assumes`. Before applying the profile, treat as known every concept in the `teaches` of a prerequisite chapter the learner has finished (a pack item with `done: true` in that chapter's `progress.json`), and as presumed known those taught by an unfinished prerequisite only if the profile also implies them. Ask only about what is left. Most of the time nothing is left, so ask nothing. Record answers in the profile and `learning` in the chapter's `topic.json` as usual. Never ask about the course goal again.
+
 ## Rules
 
 - Never ask about the same concept twice across topics: the profile is the memory.
