@@ -10,9 +10,6 @@ import { queryClient } from '@/lib/query';
 import { space } from '@/theme';
 
 function defaultUrl() {
-  // A build can name its server (for example the web app deployed to Cloudflare).
-  const built = process.env.EXPO_PUBLIC_STUDYO_SERVER;
-  if (built) return built;
   // Served from this machine or the local network: the API is usually next door on :8787.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const host = window.location.hostname;
@@ -20,7 +17,8 @@ function defaultUrl() {
       return `${window.location.protocol}//${host}:8787`;
     }
   }
-  return '';
+  // A build can name its server (the web app deployed to Cloudflare does).
+  return process.env.EXPO_PUBLIC_STUDYO_SERVER ?? '';
 }
 
 /** First run and "change server": URL, token and optional Cloudflare Access service token. */

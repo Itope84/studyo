@@ -27,3 +27,4 @@ coverage/
 # Playwright
 test-results/
 playwright-report/
+!apps/app/.env.production

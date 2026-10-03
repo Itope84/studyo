@@ -2,7 +2,7 @@ import { networkInterfaces } from 'node:os';
 import { join, relative } from 'node:path';
 import { serve } from '@hono/node-server';
 import { createServer } from './app.ts';
-import { loadConfig, REPO_ROOT } from './config.ts';
+import { loadConfig, loadDotEnv, REPO_ROOT } from './config.ts';
 import { webApp } from './web.ts';
 
 process.removeAllListeners('warning');
@@ -10,6 +10,7 @@ process.on('warning', (w) => {
   if (w.name !== 'ExperimentalWarning') console.warn(w);
 });
 
+loadDotEnv();
 const config = loadConfig();
 const { app, close } = await createServer(config);
 

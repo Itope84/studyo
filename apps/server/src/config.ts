@@ -33,6 +33,16 @@ export function deriveFileToken(token: string): string {
 }
 
 /** Read config from env, creating the state dir, token and skills link on first run. */
+/** Settings kept in `<repo>/.env` (gitignored), so a login item or launchd sees the same values as a shell. */
+export function loadDotEnv(file = join(REPO_ROOT, '.env')) {
+  if (!existsSync(file)) return;
+  try {
+    process.loadEnvFile(file);
+  } catch (e) {
+    console.warn(`Could not read ${file}: ${(e as Error).message}`);
+  }
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const library = resolve(env.STUDYO_LIBRARY ?? join(REPO_ROOT, 'library'));
   const stateDir = join(library, '_studyo');
