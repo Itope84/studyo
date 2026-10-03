@@ -1,0 +1,25 @@
+# User library content (personal topics, inbox, profile). Keep the skeleton only.
+library/*
+!library/.gitkeep
+!library/topics/
+library/topics/*
+!library/topics/.gitkeep
+!library/inbox/
+library/inbox/*
+!library/inbox/.gitkeep
+
+# Dependencies and builds
+node_modules/
+dist/
+build/
+.expo/
+web-build/
+*.tsbuildinfo
+coverage/
+
+# Env and local state
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log

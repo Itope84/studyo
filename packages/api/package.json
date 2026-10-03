@@ -1,0 +1,19 @@
+{
+  "name": "@studyo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./openapi.yaml": "./openapi.yaml"
+  },
+  "scripts": {
+    "gen": "openapi-typescript openapi.yaml -o src/schema.gen.ts",
+    "lint:spec": "redocly lint openapi.yaml",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@redocly/cli": "*",
+    "openapi-typescript": "*"
+  }
+}

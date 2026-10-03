@@ -1,0 +1,104 @@
+{
+  "id": "pc-ca-mcts",
+  "title": "pc-ca-mcts",
+  "status": "enriching",
+  "origin": {
+    "type": "link",
+    "link": "https://blog.cloudflare.com/pq-ca-with-mtcs/"
+  },
+  "session_id": null,
+  "resources": [
+    {
+      "id": "pack",
+      "type": "pack",
+      "title": "Study pack: Building a post-quantum CA with MTCs",
+      "path": "pack/pack.md",
+      "made_with": "Claude Code, claude-sonnet-5-5",
+      "size": 24985,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S1",
+      "type": "source",
+      "title": "Building a post-quantum certificate authority with Merkle Tree Certificates",
+      "path": "sources/S1-cloudflare-pq-ca-mtcs.md",
+      "made_with": null,
+      "size": 17378,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S2",
+      "type": "source",
+      "title": "RFC 6962: Certificate Transparency",
+      "path": "sources/S2-rfc6962-ct.md",
+      "made_with": null,
+      "size": 55048,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S3",
+      "type": "source",
+      "title": "Merkle Tree Certificates (IETF draft)",
+      "path": "sources/S3-plants-mtc-draft.md",
+      "made_with": null,
+      "size": 231045,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S4",
+      "type": "source",
+      "title": "Introducing Merkle Tree Certificates (Cloudflare)",
+      "path": "sources/S4-cf-bootstrap-mtc.md",
+      "made_with": null,
+      "size": 26358,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S5",
+      "type": "source",
+      "title": "RFC 8555: ACME",
+      "path": "sources/S5-rfc8555-acme.md",
+      "made_with": null,
+      "size": 196903,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "S6",
+      "type": "source",
+      "title": "Transparency Log Mirrors (c2sp)",
+      "path": "sources/S6-c2sp-tlog-mirror.md",
+      "made_with": null,
+      "size": 24311,
+      "added": "2026-10-03"
+    },
+    {
+      "id": "condensed-all-2026-10-03",
+      "type": "condensed",
+      "title": "Merkle Tree Certificates in plain words",
+      "path": "outputs/condensed-all-2026-10-03.md",
+      "made_with": "Claude Code, claude-sonnet-5-5",
+      "size": 7290,
+      "added": "2026-10-03"
+    }
+  ],
+  "created": "2026-10-02T23:21:46Z",
+  "updated": "2026-10-03T00:00:00Z",
+  "learning": {
+    "goal": "Understand both the post-quantum scaling problem that pushes the Web PKI to change and, step by step, how Merkle Tree Certificates are issued and verified and why they save space.",
+    "gaps": [
+      "hash functions (basis for Merkle trees and inclusion proofs)",
+      "digital signatures and public/private keys (basis for certificates, checkpoints, cosignatures)",
+      "certificate chains and X.509 (builds on digital signatures; needed for 'certificate chains', 'intermediate elision')",
+      "root programs / root stores (builds on certificate chains; needed for Chrome's Quantum-resistant Root Store)",
+      "why quantum computers threaten today's signatures (builds on digital signatures)",
+      "post-quantum signature and key sizes (builds on the quantum threat; the core of the scaling problem)",
+      "certificate transparency logs and monitors (builds on certificates and CAs)",
+      "Merkle trees (builds on hash functions; core of MTCs)",
+      "inclusion and consistency proofs (builds on Merkle trees)",
+      "checkpoints (signed tree heads) and cosigners/mirrors (builds on digital signatures and consistency proofs)",
+      "ACME (builds on certificates and domain validation)",
+      "downgrade attacks (builds on PQ vs classical authentication; needed for CT monitoring of PQ downgrades)"
+    ],
+    "updated": "2026-10-03"
+  }
+}

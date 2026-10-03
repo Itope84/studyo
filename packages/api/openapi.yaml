@@ -1,0 +1,1268 @@
+openapi: 3.1.0
+info:
+  title: Studyo server API
+  version: 0.1.0
+  description: |
+    Contract between the Studyo home server and the Studyo app.
+
+    - The library folder on the server is the source of truth. Every resource the app shows exists as a file.
+    - All AI work runs as a **job**. Live changes arrive on `GET /events` (Server-Sent Events). The stream only
+      announces changes: everything it carries can also be fetched, so a client that was suspended (iPhone web app)
+      catches up by fetching snapshots and replaying from its last event id. See `events.md`.
+    - Every call except `GET /health` needs the access token as `Authorization: Bearer <token>`. When the server sits
+      behind Cloudflare Access, clients also send `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
+    - Media elements and the Reader's iframe cannot send headers, so files are also served under
+      `/f/{file_token}/...`. The file token is derived from the access token, grants read access to files only,
+      and is returned by `GET /server`.
+servers:
+  - url: http://localhost:8787
+security:
+  - bearer: []
+
+tags:
+  - name: server
+  - name: topics
+  - name: files
+  - name: progress
+  - name: jobs
+  - name: chat
+  - name: inbox
+  - name: profile
+  - name: events
+  - name: push
+
+paths:
+  /health:
+    get:
+      tags: [server]
+      summary: Liveness check. No auth.
+      security: []
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /server:
+    get:
+      tags: [server]
+      summary: Server info, available CLIs and the file token
+      operationId: getServerInfo
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServerInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /settings:
+    get:
+      tags: [server]
+      summary: Server settings
+      operationId: getSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [server]
+      summary: Change server settings, such as which CLI runs jobs
+      operationId: putSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Settings' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /topics:
+    get:
+      tags: [topics]
+      summary: Home data, the topic list with the Continue item and the inbox count
+      operationId: listTopics
+      parameters:
+        - name: include_archived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopicList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [topics]
+      summary: Create a topic from a link, an uploaded PDF or a name
+      description: |
+        JSON for a link or a name; multipart for a PDF. When `enrich` is true the server queues an enrich job and
+        returns it.
+      operationId: createTopic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTopic' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                enrich: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopicWithJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /topics/{topic_id}:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    get:
+      tags: [topics]
+      summary: One topic with its manifest, progress and jobs
+      operationId: getTopic
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopicDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [topics]
+      summary: Rename, archive or unarchive, or reorder resources
+      operationId: updateTopic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTopic' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Topic' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics/{topic_id}/resources:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    post:
+      tags: [topics]
+      summary: Upload a file (audio, video, document) into the topic's outputs
+      operationId: uploadResource
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                made_with:
+                  type: string
+                  description: For example NotebookLM
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resource' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/resources/{resource_id}/rendered:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [topics]
+      summary: Make sure a pack or condensed doc has fresh HTML, and return where it is
+      description: Renders the Markdown when the HTML is missing, older than the Markdown, or from an older renderer.
+      operationId: getRendered
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Rendered' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: The Markdown could not be rendered (unknown directive, missing asset)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /topics/{topic_id}/mark-read:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    post:
+      tags: [topics, profile]
+      summary: Mark the topic as read. Adds its gap concepts to the profile with `via read`.
+      operationId: markTopicRead
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /files/{path}:
+    get:
+      tags: [files]
+      summary: Serve a library file. Supports Range requests so media can stream and seek.
+      operationId: getFile
+      parameters:
+        - $ref: '#/components/parameters/FilePath'
+        - $ref: '#/components/parameters/Range'
+      responses:
+        '200': { $ref: '#/components/responses/File' }
+        '206': { $ref: '#/components/responses/PartialFile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '416':
+          description: Range not satisfiable
+
+  /f/{file_token}/{path}:
+    get:
+      tags: [files]
+      summary: Same as `/files/{path}`, authorised by the file token in the path
+      description: |
+        For `<audio>`, `<video>`, `<img>` and the Reader iframe. Because the token is part of the path, relative links
+        inside rendered HTML (images, shared assets) resolve under it and keep working.
+      operationId: getFileWithToken
+      security: []
+      parameters:
+        - name: file_token
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/FilePath'
+        - $ref: '#/components/parameters/Range'
+      responses:
+        '200': { $ref: '#/components/responses/File' }
+        '206': { $ref: '#/components/responses/PartialFile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '416':
+          description: Range not satisfiable
+
+  /topics/{topic_id}/progress:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    get:
+      tags: [progress]
+      summary: Playback and reading progress for a topic
+      operationId: getProgress
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [progress]
+      summary: Save positions and done marks. Per item, the most recent `updated` wins.
+      operationId: putProgress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProgressUpdate' }
+      responses:
+        '200':
+          description: The merged progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Progress' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /topics/{topic_id}/jobs:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    post:
+      tags: [jobs]
+      summary: Start an enrich, deep enrich or condense job
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateJob' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /jobs:
+    get:
+      tags: [jobs]
+      summary: List jobs. The app calls `?active=true` on every resume.
+      operationId: listJobs
+      parameters:
+        - name: active
+          in: query
+          description: Only queued, running and needs_input jobs
+          schema: { type: boolean, default: false }
+        - name: topic_id
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /jobs/{job_id}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [jobs]
+      summary: Job state and its recent log lines
+      operationId: getJob
+      parameters:
+        - name: log_lines
+          in: query
+          schema: { type: integer, default: 200, maximum: 2000 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /jobs/{job_id}/answers:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [jobs]
+      summary: Answer a job's questions. The server resumes the CLI session with them.
+      operationId: answerJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnswerSet' }
+      responses:
+        '202':
+          description: Accepted; the job is queued to resume
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /jobs/{job_id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [jobs]
+      summary: Cancel a queued, running or waiting job
+      operationId: cancelJob
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Job' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics/{topic_id}/chat:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+    get:
+      tags: [chat]
+      summary: The topic's conversation
+      operationId: getChat
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatHistory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [chat]
+      summary: Send a message
+      description: |
+        Saves the question, creates an empty assistant message and queues an `answer` job in the chat lane. The reply
+        streams as `chat.delta` events and is saved as it grows, so a client that reconnects mid-reply sees all of
+        it. Refused with 409 while the topic is enriching or condensing, because the job holds the topic's session.
+      operationId: sendChat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendChat' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatTurn' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbox:
+    get:
+      tags: [inbox]
+      summary: Files in `library/inbox/` that belong to no topic
+      operationId: listInbox
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [inbox]
+      summary: Upload a file into the inbox
+      operationId: uploadInbox
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /inbox/assign:
+    post:
+      tags: [inbox]
+      summary: Move an inbox file into an existing topic, or start a new topic from it
+      operationId: assignInbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignInbox' }
+      responses:
+        '200':
+          description: Moved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopicWithJob' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /profile:
+    get:
+      tags: [profile]
+      summary: The person profile (`library/profile.md`)
+      operationId: getProfile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [profile]
+      summary: Replace the person profile
+      operationId: putProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Profile' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /events:
+    get:
+      tags: [events]
+      summary: Live event stream (Server-Sent Events)
+      description: |
+        `text/event-stream`. Each message has `id:` (an increasing integer), `event:` (the type) and `data:` (JSON,
+        see `Event`). A comment line (`: ping`) is sent every 20 seconds. To replay what was missed, pass the last id
+        as `Last-Event-ID` or `?after=`. If the id is older than the retained log, the server sends `resync` first
+        and the client must refetch its snapshots.
+      operationId: streamEvents
+      parameters:
+        - name: after
+          in: query
+          schema: { type: integer }
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stream
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /push/key:
+    get:
+      tags: [push]
+      summary: VAPID public key for Web Push
+      operationId: getPushKey
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [public_key]
+                properties:
+                  public_key: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /push/subscriptions:
+    post:
+      tags: [push]
+      summary: Register a Web Push subscription
+      operationId: addPushSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSubscription' }
+      responses:
+        '204': { description: Saved }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [push]
+      summary: Remove a Web Push subscription
+      operationId: removePushSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string }
+      responses:
+        '204': { description: Removed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+  parameters:
+    TopicId:
+      name: topic_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]*$' }
+    ResourceId:
+      name: resource_id
+      in: path
+      required: true
+      schema: { type: string }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string }
+    FilePath:
+      name: path
+      in: path
+      required: true
+      description: Path relative to the library root, for example `topics/pc-ca-mcts/pack/pack.html`. May contain slashes.
+      schema: { type: string }
+    Range:
+      name: Range
+      in: header
+      schema: { type: string, example: 'bytes=0-1023' }
+
+  responses:
+    File:
+      description: Whole file
+      headers:
+        Accept-Ranges: { schema: { type: string, const: bytes } }
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
+    PartialFile:
+      description: Partial content
+      headers:
+        Content-Range: { schema: { type: string } }
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or wrong token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Not allowed in the current state (for example a job already running on the topic)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string, description: One plain sentence the app can show }
+
+    Health:
+      type: object
+      required: [ok, name, version]
+      properties:
+        ok: { type: boolean }
+        name: { type: string, const: studyo }
+        version: { type: string }
+
+    CliId:
+      type: string
+      enum: [claude, opencode]
+
+    CliInfo:
+      type: object
+      required: [id, label, installed]
+      properties:
+        id: { $ref: '#/components/schemas/CliId' }
+        label: { type: string }
+        installed: { type: boolean }
+        version: { type: [string, 'null'] }
+
+    ServerInfo:
+      type: object
+      required: [version, file_token, clis, settings, storage]
+      properties:
+        version: { type: string }
+        file_token: { type: string }
+        clis:
+          type: array
+          items: { $ref: '#/components/schemas/CliInfo' }
+        settings: { $ref: '#/components/schemas/Settings' }
+        storage:
+          type: object
+          required: [library_bytes]
+          properties:
+            library_bytes: { type: integer }
+
+    Settings:
+      type: object
+      required: [cli]
+      properties:
+        cli: { $ref: '#/components/schemas/CliId' }
+        models:
+          type: object
+          description: Optional model per CLI. Empty means the CLI's default.
+          properties:
+            claude: { type: [string, 'null'] }
+            opencode: { type: [string, 'null'], description: 'provider/model' }
+
+    TopicStatus:
+      type: string
+      enum: [captured, enriching, ready, failed, archived]
+
+    Origin:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [link, pdf, topic]
+        link: { type: string, description: When type is link }
+        name: { type: string, description: When type is topic }
+        file: { type: string, description: 'When type is pdf, the path inside the topic folder' }
+
+    ResourceType:
+      type: string
+      enum: [source, pack, condensed, audio, video]
+
+    Resource:
+      type: object
+      required: [id, type, title, path]
+      properties:
+        id: { type: string }
+        type: { $ref: '#/components/schemas/ResourceType' }
+        title: { type: string }
+        path: { type: string, description: Relative to the topic folder }
+        made_with: { type: [string, 'null'] }
+        duration: { type: [number, 'null'], description: 'Seconds, for audio and video' }
+        size: { type: [integer, 'null'], description: Bytes }
+        added: { type: string, description: ISO date or date-time }
+        html_path:
+          type: [string, 'null']
+          description: Derived by the server. Path of the rendered HTML next to a pack or condensed `.md`, when it exists.
+        url:
+          type: [string, 'null']
+          description: Derived by the server. For a source saved from the web, its original URL (from the ledger).
+
+    Learning:
+      type: object
+      properties:
+        goal: { type: string }
+        gaps:
+          type: array
+          items: { type: string }
+        updated: { type: string }
+
+    Topic:
+      type: object
+      description: The topic manifest (`topic.json`) as the server sees it, after auto-discovery.
+      required: [id, title, status, origin, resources, created, updated]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/TopicStatus' }
+        origin: { $ref: '#/components/schemas/Origin' }
+        session_id:
+          type: [string, 'null']
+          description: The CLI session used for enrichment and chat
+        session_cli:
+          oneOf:
+            - $ref: '#/components/schemas/CliId'
+            - type: 'null'
+          description: Which CLI the session belongs to
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/Resource' }
+        learning:
+          oneOf:
+            - $ref: '#/components/schemas/Learning'
+            - type: 'null'
+        failure_reason: { type: [string, 'null'] }
+        created: { type: string }
+        updated: { type: string }
+
+    TopicSummary:
+      type: object
+      required: [id, title, status, origin, counts, progress, updated]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/TopicStatus' }
+        origin: { $ref: '#/components/schemas/Origin' }
+        counts:
+          type: object
+          required: [sources, docs, media]
+          properties:
+            sources: { type: integer }
+            docs: { type: integer, description: Pack plus condensed docs }
+            media: { type: integer }
+        progress:
+          type: object
+          required: [done, total]
+          properties:
+            done: { type: integer, description: Docs and media marked done }
+            total: { type: integer }
+        failure_reason: { type: [string, 'null'] }
+        active_job:
+          oneOf:
+            - $ref: '#/components/schemas/Job'
+            - type: 'null'
+        updated: { type: string }
+
+    ContinueItem:
+      type: object
+      required: [topic_id, topic_title, resource, item]
+      properties:
+        topic_id: { type: string }
+        topic_title: { type: string }
+        resource: { $ref: '#/components/schemas/Resource' }
+        item: { $ref: '#/components/schemas/ProgressItem' }
+
+    TopicList:
+      type: object
+      required: [topics, continue, inbox_count]
+      properties:
+        topics:
+          type: array
+          items: { $ref: '#/components/schemas/TopicSummary' }
+        continue:
+          oneOf:
+            - $ref: '#/components/schemas/ContinueItem'
+            - type: 'null'
+        inbox_count: { type: integer }
+
+    TopicDetail:
+      type: object
+      required: [topic, progress, jobs]
+      properties:
+        topic: { $ref: '#/components/schemas/Topic' }
+        progress: { $ref: '#/components/schemas/Progress' }
+        jobs:
+          type: array
+          description: Active jobs first, then the most recent finished ones
+          items: { $ref: '#/components/schemas/Job' }
+
+    TopicWithJob:
+      type: object
+      required: [topic, job]
+      properties:
+        topic: { $ref: '#/components/schemas/Topic' }
+        job:
+          oneOf:
+            - $ref: '#/components/schemas/Job'
+            - type: 'null'
+
+    CreateTopic:
+      type: object
+      required: [origin]
+      properties:
+        origin:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [link, topic]
+            link: { type: string, format: uri }
+            name: { type: string, minLength: 2 }
+        title: { type: string }
+        enrich: { type: boolean, default: true }
+
+    UpdateTopic:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        archived: { type: boolean }
+        resource_order:
+          type: array
+          description: Resource ids in the new order. Ids not listed keep their relative order at the end.
+          items: { type: string }
+
+    Rendered:
+      type: object
+      required: [html_path, renderer_version]
+      properties:
+        html_path: { type: string, description: Relative to the library root }
+        renderer_version: { type: string }
+
+    ProgressItem:
+      type: object
+      required: [position, done, updated]
+      properties:
+        position:
+          type: number
+          description: Seconds for audio and video; a 0–1 fraction of the page for documents
+        duration: { type: [number, 'null'], description: 'Seconds, for media' }
+        section: { type: [string, 'null'], description: 'Heading id the reader was in, for documents' }
+        done: { type: boolean }
+        updated: { type: string, format: date-time }
+
+    Progress:
+      type: object
+      required: [items, last]
+      properties:
+        items:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/ProgressItem' }
+        last:
+          description: The item most recently played or read in this topic
+          oneOf:
+            - type: object
+              required: [resource_id, updated]
+              properties:
+                resource_id: { type: string }
+                updated: { type: string, format: date-time }
+            - type: 'null'
+
+    ProgressUpdate:
+      type: object
+      required: [resource_id, position, updated]
+      properties:
+        resource_id: { type: string }
+        position: { type: number }
+        duration: { type: [number, 'null'] }
+        section: { type: [string, 'null'] }
+        done: { type: boolean }
+        updated:
+          type: string
+          format: date-time
+          description: When the change happened on the device. An older update than the stored one is ignored.
+
+    JobKind:
+      type: string
+      enum: [enrich, enrich-deep, condense, answer]
+
+    JobStatus:
+      type: string
+      enum: [queued, running, needs_input, succeeded, failed, cancelled]
+
+    Job:
+      type: object
+      required: [id, kind, topic_id, lane, status, cli, created]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/JobKind' }
+        topic_id: { type: string }
+        lane:
+          type: string
+          enum: [work, chat]
+          description: Work jobs run one at a time; chat runs in its own lane so questions don't wait behind enrichment.
+        status: { $ref: '#/components/schemas/JobStatus' }
+        cli: { $ref: '#/components/schemas/CliId' }
+        params:
+          type: object
+          description: Skill parameters, for example scope for condense
+          additionalProperties: true
+        activity:
+          type: [string, 'null']
+          description: The latest human-readable progress line
+        questions:
+          oneOf:
+            - $ref: '#/components/schemas/QuestionSet'
+            - type: 'null'
+        error: { type: [string, 'null'] }
+        suggest_enrich:
+          type: [string, 'null']
+          description: For answer jobs, a focus the reply offered to enrich
+        created: { type: string, format: date-time }
+        started: { type: [string, 'null'], format: date-time }
+        finished: { type: [string, 'null'], format: date-time }
+
+    JobList:
+      type: object
+      required: [jobs]
+      properties:
+        jobs:
+          type: array
+          items: { $ref: '#/components/schemas/Job' }
+
+    LogLine:
+      type: object
+      required: [seq, at, kind, text]
+      properties:
+        seq: { type: integer }
+        at: { type: string, format: date-time }
+        kind:
+          type: string
+          enum: [progress, tool, text, stderr, system]
+          description: progress is a `[studyo]` line from a skill; tool is a tool call; text is model output
+        text: { type: string }
+
+    JobDetail:
+      allOf:
+        - $ref: '#/components/schemas/Job'
+        - type: object
+          required: [log]
+          properties:
+            log:
+              type: array
+              items: { $ref: '#/components/schemas/LogLine' }
+
+    CreateJob:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [enrich, enrich-deep, condense]
+        scope:
+          description: For condense, `all` or a list of pack section ids
+          oneOf:
+            - type: string
+              const: all
+            - type: array
+              items: { type: string }
+        focus: { type: string, description: 'For enrich-deep, what to go deeper on' }
+
+    QuestionSet:
+      type: object
+      description: Written by a skill when it needs the learner. The job waits in needs_input until answered.
+      required: [id, questions, asked]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        intro: { type: string }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/Question' }
+        asked: { type: string, format: date-time }
+
+    Question:
+      type: object
+      required: [id, kind, label]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [multi, single, text]
+        label: { type: string }
+        help: { type: string }
+        required: { type: boolean, default: false }
+        placeholder: { type: string }
+        options:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              group: { type: string, description: Heading to group options under }
+              checked: { type: boolean, description: Pre-selected }
+              note: { type: string, description: 'Why it is pre-selected, or what it builds on' }
+
+    AnswerSet:
+      type: object
+      required: [question_set_id, answers]
+      properties:
+        question_set_id: { type: string }
+        answers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              selected:
+                type: array
+                items: { type: string }
+              text: { type: string }
+
+    ChatMessage:
+      type: object
+      required: [id, role, text, status, created]
+      properties:
+        id: { type: string }
+        role:
+          type: string
+          enum: [user, assistant]
+        text: { type: string, description: Markdown with reference-style citations }
+        status:
+          type: string
+          enum: [pending, streaming, complete, failed]
+        job_id: { type: [string, 'null'] }
+        suggest_enrich: { type: [string, 'null'] }
+        error: { type: [string, 'null'] }
+        created: { type: string, format: date-time }
+
+    ChatHistory:
+      type: object
+      required: [messages, available]
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        available:
+          type: boolean
+          description: False while a work job holds the topic's session, or when there is no pack yet
+        unavailable_reason: { type: [string, 'null'] }
+
+    SendChat:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1 }
+
+    ChatTurn:
+      type: object
+      required: [user, assistant, job]
+      properties:
+        user: { $ref: '#/components/schemas/ChatMessage' }
+        assistant: { $ref: '#/components/schemas/ChatMessage' }
+        job: { $ref: '#/components/schemas/Job' }
+
+    InboxItem:
+      type: object
+      required: [path, name, kind, size, added]
+      properties:
+        path: { type: string, description: Relative to the library root }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [pdf, audio, video, document, other]
+        size: { type: integer }
+        added: { type: string, format: date-time }
+
+    InboxList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InboxItem' }
+
+    AssignInbox:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string }
+        topic_id: { type: string, description: Move into this topic }
+        new_topic:
+          type: object
+          description: Or start a new topic from the file (PDFs become the topic's origin)
+          properties:
+            title: { type: string }
+            enrich: { type: boolean, default: true }
+
+    KnowsEntry:
+      type: object
+      required: [term, via]
+      properties:
+        term: { type: string }
+        via:
+          type: string
+          enum: [self-reported, inferred, read, forgot]
+        topic: { type: string }
+        date: { type: string }
+
+    Profile:
+      type: object
+      required: [knows, notes]
+      properties:
+        knows:
+          type: array
+          items: { $ref: '#/components/schemas/KnowsEntry' }
+        notes: { type: string, description: The free-text Markdown body }
+
+    PushSubscription:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string }
+            auth: { type: string }
+
+    EventType:
+      type: string
+      enum: [resync, job.updated, job.log, chat.delta, chat.message, topic.updated, topic.removed, inbox.updated]
+
+    Event:
+      type: object
+      description: The JSON in an SSE `data:` line. `id` repeats the SSE id.
+      required: [id, type, at, data]
+      properties:
+        id: { type: integer }
+        type: { $ref: '#/components/schemas/EventType' }
+        at: { type: string, format: date-time }
+        data:
+          anyOf:
+            - $ref: '#/components/schemas/JobUpdatedData'
+            - $ref: '#/components/schemas/JobLogData'
+            - $ref: '#/components/schemas/ChatDeltaData'
+            - $ref: '#/components/schemas/ChatMessageData'
+            - $ref: '#/components/schemas/TopicEventData'
+            - type: object
+
+    JobUpdatedData:
+      type: object
+      required: [job]
+      properties:
+        job: { $ref: '#/components/schemas/Job' }
+
+    JobLogData:
+      type: object
+      required: [job_id, line]
+      properties:
+        job_id: { type: string }
+        line: { $ref: '#/components/schemas/LogLine' }
+
+    ChatDeltaData:
+      type: object
+      required: [topic_id, message_id, text]
+      properties:
+        topic_id: { type: string }
+        message_id: { type: string }
+        text: { type: string, description: Text to append }
+
+    ChatMessageData:
+      type: object
+      required: [topic_id, message]
+      properties:
+        topic_id: { type: string }
+        message: { $ref: '#/components/schemas/ChatMessage' }
+
+    TopicEventData:
+      type: object
+      required: [topic_id]
+      properties:
+        topic_id: { type: string }

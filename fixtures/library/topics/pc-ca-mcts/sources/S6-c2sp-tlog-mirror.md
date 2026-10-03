@@ -1,0 +1,464 @@
+[![C2SP](/-/logo/logo.svg)](/)
+c2sp.org/tlog-mirror
+
+# Transparency Log Mirrors
+
+[main](/tlog-mirror@main) (2026-10-01)
+·
+maintained by
+[@AlCutter](https://github.com/AlCutter)
+[@davidben](https://github.com/davidben)
+[@lukevalenta](https://github.com/lukevalenta)
+
+versions:
+[main](/tlog-mirror@main)
+· [issue tracker](https://github.com/C2SP/C2SP/issues?q=in%3Atitle%20%22tlog-mirror%22) ([new issue](https://github.com/C2SP/C2SP/issues/new?title=tlog-mirror%3A%20))
+· [source](https://github.com/C2SP/C2SP/blob/main/tlog-mirror.md)
+
+This is the development version of this specification,
+rendered from the tip of the main branch.
+
+This document describes how to mirror a transparency log, and how to obtain
+signatures asserting that a mirror has done so.
+
+## Conventions used in this document [§](#conventions-used-in-this-document)
+
+The base64 encoding used throughout is the standard Base 64 encoding specified
+in [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648.html), Section 4, with `=` padding. Encoders MUST generate
+canonical base64 according to RFC 4648, Section 3.5, and decoders MUST reject
+non-canonical encodings.
+
+`U+` followed by four hexadecimal characters denotes a Unicode codepoint, to be
+encoded in UTF-8. `0x` followed by two hexadecimal characters denotes a byte
+value in the 0-255 range.
+
+`[start, end)`, where `start <= end`, denotes the half-open interval containing
+integers `x` such that `start <= x < end`.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
+"SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this
+document are to be interpreted as described in [BCP 14](https://www.rfc-editor.org/info/bcp14) [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119.html) [RFC
+8174](https://www.rfc-editor.org/rfc/rfc8174.html) when, and only when, they appear in all capitals, as shown here.
+
+## Introduction [§](#introduction)
+
+A mirror is a [cosigner](https://c2sp.org/tlog-cosignature) that stores a copy of a log. A mirror's
+[cosignature](https://c2sp.org/tlog-cosignature) makes the [additional statement](https://c2sp.org/tlog-cosignature@main#additional-statements) that the mirror has
+durably logged the contents of the [checkpoint](https://c2sp.org/tlog-checkpoint) and made them accessible.
+
+A mirror is defined by a name, a public key, a *submission prefix* for write
+APIs, and one or more *monitoring prefixes* for read APIs. A mirror MAY use the
+same value for both the *submission prefix* and one of its *monitoring prefix*.
+
+For each supported origin log, the mirror is configured with:
+
+* The log's [checkpoint](https://c2sp.org/tlog-checkpoint) origin
+* The log's public key
+* A minimum index to start mirroring (see below for how this is configured)
+
+The mirror maintains a copy of each origin log and serves it publicly via the
+[tiled transparency log](https://c2sp.org/tlog-tiles) interface. For each monitoring prefix, this copy has
+a URL prefix of `<monitoring prefix>/<origin hash>`, where `origin hash` is the
+SHA-256 hash of the log's origin, hex encoded, in lowercase. The checkpoint
+served from this prefix MUST include a [cosignature](https://c2sp.org/tlog-cosignature) from the mirror.
+
+## Updating a Mirror [§](#updating-a-mirror)
+
+The mirror update process is designed to be safely interruptible, while avoiding
+large atomic operations. For each origin log, a mirror maintains the following:
+
+* A copy of the log, [pruned](https://c2sp.org/tlog-tiles#pruning) to its minimum index. The latest
+  checkpoint of this log copy is known as the *mirror checkpoint*.
+* A *pending checkpoint*, which is at or ahead of the mirror checkpoint. If
+  ahead of the mirror checkpoint, the pending checkpoint describes entries that
+  have yet to be incorporated into the mirror.
+* A list of *pending entries* that have yet to be incorporated into the mirror
+  checkpoint. The mirror's *next entry* is the log index of the first entry,
+  greater or equal to the minimum index, that is not in either the log or
+  pending entry list.
+
+The update process ensures that all current and past pending checkpoints are
+consistent, and all pending entries are contained in the current pending
+checkpoint. Thus mirrors MAY commit pending entries to the log, serving them as
+entry bundles, as soon as they are added. That is, a mirror MAY use the same
+underlying storage for entry bundles and pending entries, without distinguishing
+between them. It is expected that most tiled log implementations will do this.
+
+Mirrors update in three stages:
+
+1. A mirror client updates the pending checkpoint with a signed checkpoint and a
+   consistency proof.
+2. A mirror client uploads new entries to the pending entry list, up to the
+   pending checkpoint.
+3. The mirror commits the pending entries to the log and updates the mirror
+   checkpoint.
+
+The next sections describe the HTTP endpoints used by mirror clients to update
+the log.
+
+### add-checkpoint [§](#add-checkpoint)
+
+The mirror implements a [witness](https://c2sp.org/tlog-witness)'s `add-checkpoint` endpoint to update its
+pending checkpoint for a log:
+
+```
+POST <submission prefix>/add-checkpoint
+```
+
+The request is handled identically to that of a witness, updating the pending
+checkpoint (but not the mirror checkpoint), with the exception that it does not
+need to generate and respond with any cosignatures. The mirror MAY handle the
+request by internally updating the pending checkpoint and responding with an
+empty response body. The mirror MUST retain the log's signature in the pending
+checkpoint.
+
+The mirror cosigner MUST NOT sign the checkpoint in this process. It MAY respond
+with witness cosignatures if the mirror operator wishes to additionally provide
+a separate witness service using its pending checkpoint. If so, this witness
+service MUST be a distinct cosigner from the mirror cosigner, with a distinct
+name. The mirror's signature is computed later, as described below.
+
+If providing both mirror and witness services, the submission prefixes for the
+two services MAY be the same, but the monitoring prefixes MUST be distinct.
+
+### sign-subtree [§](#sign-subtree)
+
+The mirror implements a [witness](https://c2sp.org/tlog-witness)'s `sign-subtree` endpoint to produce
+cosignatures by the mirror key(s) when provided a checkpoint signed by the
+mirror and a subtree consistency proof.
+
+It is OPTIONAL for a mirror to support this API.
+
+```
+POST <submission prefix>/sign-subtree
+```
+
+The request is handled identically to that of a witness.
+
+If providing both mirror and witness services, checkpoints signed only with the
+witness key(s), if any, MUST NOT be exchanged for subtrees signed by the mirror key(s).
+If the submission prefixes for the two services are the same, the mirror MUST
+use the same identity (or identities) when signing the subtree as was (or were)
+used to sign and verify the reference checkpoint.
+
+### add-entries [§](#add-entries)
+
+The mirror implements an `add-entries` endpoint to upload entries for a
+supported log:
+
+```
+POST <submission prefix>/add-entries
+```
+
+#### Request Body [§](#request-body)
+
+The request body MUST have `Content-Type` of `application/octet-stream` and
+contain the following values, concatenated.
+
+* 1 byte, encoding a uint8: `log_origin_size`
+* `log_origin_size` bytes, containing the log origin: `log_origin`
+* 8 bytes, encoding a big-endian uint64: `upload_start`
+* 8 bytes, encoding a big-endian uint64: `upload_end`
+* 2 bytes, encoding a big-endian uint16: `ticket_size`
+* `ticket_size` bytes, containing an opaque `ticket` value, described below
+* A sequence of *entry packages*, described below
+
+`upload_end` MUST be equal to the pending checkpoint's tree size, or that of a
+previously valid pending checkpoint. `ticket` is an opaque value from the
+mirror, or the empty string, to help the mirror recover past pending
+checkpoints.
+
+`upload_start` MUST be less or equal to `upload_end`.
+
+The request body uploads log entries from the interval
+`[upload_start, upload_end)`. The interval determines a fixed *canonical
+sequence* of entry packages, aligned at multiples of 256. Each package
+carries a bounded number of entries with a [subtree consistency proof](https://www.ietf.org/archive/id/draft-ietf-plants-merkle-tree-certs-07.html#name-subtree-consistency-proofs),
+allowing the mirror to verify and commit the package without buffering the
+entire request body.
+
+The request MUST contain a prefix of the canonical sequence: zero or more
+packages, each exactly as specified below, in order. If the client sends a
+strict prefix, the mirror processes the prefix and advances its next entry
+accordingly; the client issues further `add-entries` requests to complete
+the upload.
+
+If `upload_start` is equal to `upload_end`, the canonical sequence is empty.
+Otherwise, let `rounded_start` be `upload_start` rounded down to a multiple
+of 256, and let `rounded_end` be `upload_end` rounded up to a multiple of
+256. The canonical sequence consists of
+`num_packages = (rounded_end - rounded_start) / 256` packages. Entry
+package `i`, for `0 <= i < num_packages`, is determined by the half-open
+interval `[start, end)` of log indices where:
+
+```
+start = max(upload_start, rounded_start + i * 256)
+end = min(upload_end, rounded_start + (i + 1) * 256)
+```
+
+Each package MUST contain the following values, concatenated.
+
+* The log entries in `[start, end)`, each with a big-endian uint16 length prefix
+* 1 byte, encoding an 8-bit unsigned integer, `num_hashes`, which MUST be at
+  most 63
+* `num_hashes` [subtree consistency proof](https://www.ietf.org/archive/id/draft-ietf-plants-merkle-tree-certs-07.html#name-subtree-consistency-proofs) hash values
+
+The subtree consistency proof is computed from the [subtree](https://www.ietf.org/archive/id/draft-ietf-plants-merkle-tree-certs-07.html#name-subtrees) defined by
+`[rounded_start + i * 256, end)`, and the log checkpoint with tree size
+`upload_end`.
+
+The request body for `add-entries` SHOULD be compressed at the HTTP layer.
+Mirrors MUST support receiving `Content-Encoding: gzip` in `add-entries`
+requests. When sending responses, mirrors SHOULD send an `Accept-Encoding`
+header that includes `gzip` and any other supported compression algorithms.
+Clients MAY send `Content-Encoding: gzip` without prior knowledge of the
+mirror's capabilities. After observing an `Accept-Encoding` header, clients MAY
+also use any other listed compression algorithm.
+
+#### Processing [§](#processing)
+
+The request body has unbounded size, so the client and mirror SHOULD stream it.
+
+The mirror processes the request as follows:
+
+First, the mirror reads `log_origin`, `upload_start`, `upload_end`, and
+`ticket`:
+
+* If `log_origin` is not a known log, the mirror MUST respond with a
+  "404 Not Found" HTTP status code.
+* If the mirror has never received a pending checkpoint signed by the log, the
+  mirror MUST respond with a "422 Unprocessable Entity" HTTP status code.
+* If `upload_end` is neither a known pending checkpoint value nor the mirror
+  checkpoint's tree size, the mirror MUST respond with a "409 Conflict" HTTP
+  status code. As described below, the mirror can maintain state or use `ticket`
+  to determine known pending checkpoint values.
+* If `upload_end` is less than the mirror checkpoint's tree size, the mirror
+  MUST respond with a "409 Conflict" HTTP status code.
+* If `upload_start` is greater than the mirror's next entry, the mirror MUST
+  respond with a "409 Conflict" HTTP status code.
+* Let `excess_entries = min(upload_end, next_entry) - upload_start`, where
+  `next_entry` is the mirror's next entry. If `excess_entries` is too large, the
+  mirror MUST respond with a "409 Conflict" HTTP status code.
+
+The mirror SHOULD send these error responses without waiting for the entire
+request body to be available. Conversely, the client SHOULD be prepared to
+receive an error response before the request body is fully sent.
+
+If `upload_end` and `upload_start` are valid, the mirror proceeds to read and
+process each entry package. For each entry package, it MUST authenticate the
+entries by verifying the subtree consistency proof: First, it reconstructs the
+subtree hash based on the received entries and entries already in the log. It
+then verifies the subtree consistency proof using this hash and the checkpoint
+at `upload_end`.
+
+If this verification process fails, it MUST respond with a
+"422 Unprocessable Entity" HTTP status code and end processing. Otherwise, it
+saves the entries as pending entries. If some entry has already been written to
+the log or the pending entry list, the mirror MUST skip saving that entry.
+
+The mirror discards any partial bytes after the last successfully
+authenticated entry package. If at least one entry package was authenticated
+and saved, but the mirror has not yet received all packages covering
+`[upload_start, upload_end)`, the mirror MUST respond with a "202 Accepted"
+response carrying the advanced next entry. This case covers both a deliberate
+prefix upload by the client and an interrupted request that the mirror
+committed partially. The client retries with `upload_start` set to the
+advertised next entry value, repeating until the mirror has received all
+packages.
+
+If the canonical sequence is not empty, and no entry package was authenticated
+and saved before the body ended (for example, the request header itself was
+malformed, or the first package's bytes were truncated mid-package), the mirror
+MUST respond with a "400 Bad Request" HTTP status code.
+
+When sending a "409 Conflict" or "202 Accepted" response, the response body
+MUST have a `Content-Type` of `text/x.tlog.mirror-info` and consist of three
+lines, each followed by a newline (U+000A):
+
+* The tree size of a valid pending checkpoint, in decimal
+* The next entry, in decimal
+* An opaque, possibly zero length, ticket value, encoded in base64
+
+If the client's `upload_end` value was valid, the first line SHOULD contain
+`upload_end`. This allows the client to resume an interrupted upload without
+recomputing subtree consistency proofs. Otherwise, the first line SHOULD be the
+tree size of the current pending checkpoint.
+
+After receiving a "409 Conflict" or "202 Accepted" response, the client
+SHOULD retry setting `upload_end` to the tree size, `upload_start` to the
+advertised next entry value, and the `ticket` to the received ticket. If a
+client doesn't have information on the mirror, it MAY initially make an
+`add-checkpoint` request to obtain a pending checkpoint size and fetch a
+checkpoint from a monitoring prefix; those can become stale before the
+`add-entries` request, but are a reasonable starting point for `upload_end`
+and `upload_start`, respectively.
+
+To reduce the chance of retry failures as the mirror state changes, mirrors
+SHOULD accept any of the last several pending checkpoint values as `upload_end`.
+This MAY be implemented with extra state, or by storing the signed checkpoint in
+the ticket. The mirror MUST authenticate any information it derives from a
+ticket. For example, the ticket MAY be encrypted with a symmetric secret known
+only to the mirror.
+
+Once all expected entry packages are successfully validated and committed, the
+next entry will be greater or equal to `upload_end`. The mirror then finishes
+committing entries up to `upload_end` to the log. For example, a mirror that
+stores individual tiles might compute new tiles and start serving them.
+
+Finally, the mirror performs the following steps atomically. Note the mirror
+checkpoint may have changed since the start of this process.
+
+* Check if `upload_end` is still greater than or equal to the mirror
+  checkpoint's tree size.
+* If so, update the mirror checkpoint to the pending checkpoint of size
+  `upload_end`.
+
+If `upload_end` was too small, the mirror MUST respond with a "409 Conflict"
+HTTP status code, as described above.
+
+Otherwise, the mirror MUST respond with a
+"200 Success" HTTP status code. The response body MUST be formatted as in a
+[witness](https://c2sp.org/tlog-witness)'s successful `add-checkpoint` response: a sequence of one or more
+[note](https://c2sp.org/signed-note) signature lines, each starting with the `—` character (U+2014) and
+ending with a newline character (U+000A). The signatures MUST be
+[cosignatures](https://c2sp.org/tlog-cosignature) from the mirror key(s) on the checkpoint.
+
+Example response body:
+
+```
+— mirror.example/m1 CMp+6LWBU0anHGH5aNDTJkH/gj79sG+T6+iP2ThYN5krrDJbR1HDnucjL39QsZTSvVjyQLrdk3DXDqI5G2HgLatVs0pWh6Up69HVOw==
+— mirror.example/m1 I7rEps0pvK2UqkS2gSpVUDhrhVtQV9lgF6pRrWAvjJHjyWpW7VcE3SiOlVlbQNt64vWhO+DlkL0+UfzuOBMh9ChdMkP1vi/lCAsmlw==
+— mirror.example/m2 AWui8Sk55XjYLOijihBjhqEH6nS1ndDymE0a+6idX7pLcnoB+dhnz0854aLZgrrKbYKA7nC3HNJhm/kWl7oJlqU3rXXvpysAdyP3wQ==
+```
+
+As in the witness protocol, the client MUST ignore any cosignatures from unknown
+keys. The mirror MUST persist the new checkpoint before responding.
+
+#### Implementation Considerations [§](#implementation-considerations)
+
+Unlike the `add-checkpoint` endpoint, the `add-entries` endpoint is not
+processed as a single atomic transaction. A mirror SHOULD permit multiple
+clients to concurrently send requests to the endpoint. This avoids a
+denial-of-service attack if one client begins an `add-entries` stream but pauses
+it partway through. Additionally, clients and mirrors MUST continue operating
+correctly if an `add-entries` stream is interrupted. The API is designed to
+support this with minimal synchronization.
+
+When checking the `upload_start` and `upload_end` values, the mirror MUST act on
+*some* valid copy of its pending checkpoint and next index state. However, it
+MAY act on stale data without impacting correctness of the protocol. That is, it
+is not necessary to globally synchronize this check with `add-checkpoint`
+handling, or other instances of `add-entries`.
+
+When committing authenticated entries to the pending entries list, it is
+possible that, due to a concurrent instance of `add-entries`, some entries have
+already been added to the pending entries list or the mirror. Mirrors MUST
+correctly handle this case and continue operating correctly. This may require
+synchronization of individual log resources. In doing so, the mirror MAY assume
+that the two copies of the entries are identical. They will both be proven
+consistent with the pending checkpoints.
+
+When updating the mirror checkpoint to `upload_end`, it is possible that some
+concurrent instance of `add-entries` has already updated the mirror checkpoint to `upload_end`
+or past it. In this case, the mirror MUST NOT rewind the checkpoint and MUST
+instead skip the update.
+
+Entry packages are divided at multiples of 256 to align with the entry bundle
+representation in the tiled log interface. It is expected that most
+implementations will compute exactly one entry bundle from each entry package
+and commit it directly to log storage when the package is authenticated.
+
+A mirror that uses a different representation MAY buffer entry packages and defer
+committing them. For example, if the mirror internally stores entry bundles of
+size 512, it might commit entry packages two at a time.
+
+A mirror MAY process an entry package without waiting for the previous entry
+package to be durably committed to storage. However, the mirror MUST NOT sign
+or update its mirror checkpoint until all entries are durably committed. If the
+mirror commits entries out of order, it MUST correctly compute the next entry to
+be the *first* missing entry, even if some subsequent entries have been
+committed. Mirror clients will then reupload the subsequent entries.
+
+To work around per-request body size limits on common hosting platforms,
+clients SHOULD limit each `add-entries` request to at most 32 entry
+packages (8192 entries). When `(rounded_end - rounded_start) / 256`
+exceeds 32, the client sends the first 32 packages of the canonical
+sequence as a prefix, receives a "202 Accepted" response with the advanced
+next entry, and issues further requests to complete the upload.
+
+A mirror MAY additionally implement other update processes, provided it continues
+to correctly operate `add-entries` and never violates its cosigner requirements
+on mirror checkpoints.
+
+## Pruning and Retention Policies [§](#pruning-and-retention-policies)
+
+As with a tiled transparency log, a mirror maintains a *minimum index*
+value to support [pruning](https://c2sp.org/tlog-tiles#pruning). The discussion for origin logs also applies to
+mirrors. In particular, without a [retention policy](https://c2sp.org/tlog-tiles#retention-policies) for when pruning is
+permitted, mirrors MUST NOT be pruned. That is, the minimum index value MUST be
+set to zero.
+
+Given a retention policy, minimum indices for mirrors MAY be maintained
+independently from that of the origin log. A retention policy MAY require that
+mirrors retain data for longer than the origin log, in which case the mirror's
+minimum index will be kept at a lower value than the origin log's. However, for
+a new mirror to be initialized at a lower minimum index than the origin log, the
+missing entries MUST be available from some other source, e.g. another mirror.
+
+Conversely, a retention policy MAY permit mirrors to retain less data than the
+origin log and set a higher minimum index. For example, a log ecosystem MAY
+permit new mirrors to start from some recent index, to reduce the initial
+bandwidth cost of bootstrapping the mirror. However, in this case, log clients
+MUST NOT treat the mirror as contributing to a quorum for entries below its
+minimum index.
+
+A mirror that is already mirroring a log at some minimum index MAY lower its
+minimum index, provided the newly-mirrored entries can be obtained, e.g., via
+another mirror. Before committing these entries, the mirror MUST authenticate
+them against its mirror or pending checkpoint by checking a
+[subtree consistency proof](https://www.ietf.org/archive/id/draft-ietf-plants-merkle-tree-certs-07.html#name-subtree-consistency-proofs).
+
+## Design Rationale [§](#design-rationale)
+
+In principle, a mirror update protocol could be a single request providing:
+
+1. A new checkpoint
+2. All entries between the current and new checkpoint position
+
+The mirror could then atomically incorporate the new entries into its current
+state, check the root hash in the new checkpoint, and commit everything at once.
+However, this would be a large atomic transaction that cannot verify or commit
+any of the new entries until they all have been received and processed. A mirror
+would need to maintain an unbounded amount of uncommitted data.
+
+Instead, this protocol is split into several steps to bound the transaction
+size. The atomic transactions are:
+
+* A [witness](https://c2sp.org/tlog-witness) update operation, which acts on O(log N) hashes.
+* Committing a single [tiled transparency log](https://c2sp.org/tlog-tiles) entry bundle to the log.
+* Committing a new checkpoint to the log, if it is newer than the current one.
+
+Mirrors are expected to remain consistent. If a log signs two inconsistent
+checkpoints, the mirror should remain on *some* consistent branch, even if
+concurrent update requests upload inconsistent data. A single, giant transaction
+achieves this straightforwardly, but these smaller transactions complicate
+matters.
+
+This protocol achieves this by authenticating every log entry before committing.
+The `add-entries` endpoint requires the mirror to first be locked onto some
+containing checkpoint (a pending checkpoint). Entries can then be proven
+consistent to the pending checkpoint. To amoritize this overhead, entries are
+divided into atomic "packages", each with a consistency proof. Entry packages
+intentionally align with entry bundle boundaries, so that a
+[tiled transparency log](https://c2sp.org/tlog-tiles) implementation can commit them directly.
+
+As a result, even if there are multiple concurrent `add-entries` operations,
+all entry data is authenticated to a consistent pending checkpoint and is thus
+known to be consistent. Even if the mirror serves a mix of entries from two
+concurrent `add-entries`, those entries will be consistent.
+
+Specs [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+code [BSD-1-Clause](https://github.com/C2SP/C2SP/blob/main/.github/LICENSE-BSD-1-CLAUSE)
+· [GitHub](https://github.com/C2SP/C2SP)
+· [Code of Conduct](/-/coc)
+· [Manual](/-/manual)
