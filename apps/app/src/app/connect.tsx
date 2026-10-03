@@ -10,8 +10,15 @@ import { queryClient } from '@/lib/query';
 import { space } from '@/theme';
 
 function defaultUrl() {
+  // A build can name its server (for example the web app deployed to Cloudflare).
+  const built = process.env.EXPO_PUBLIC_STUDYO_SERVER;
+  if (built) return built;
+  // Served from this machine or the local network: the API is usually next door on :8787.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:8787`;
+    const host = window.location.hostname;
+    if (host === 'localhost' || /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host.endsWith('.local')) {
+      return `${window.location.protocol}//${host}:8787`;
+    }
   }
   return '';
 }

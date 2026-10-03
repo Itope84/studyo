@@ -37,10 +37,10 @@ Fenced blocks the renderer turns into components. **Prefer a component.** Reach 
 
 ### Components
 
-- `` ```callout kind=<kind> `` with an optional `title="..."`. Kinds: `definition` (states what a source says and carries a citation), `key-idea`, `watch-out`, `example`, `analogy` (say plainly that it is one), `note`. Body is Markdown.
+- `` ```callout kind=<kind> `` with an optional `title="..."`. Kinds: `definition` (in a pack: states what a source says and carries a citation; in a condensed doc there are no citations), `key-idea`, `watch-out`, `example`, `analogy` (say plainly that it is one), `note`. Body is Markdown.
 - `` ```details summary="..." ``: a collapsible block for optional depth. Body is Markdown.
 - `` ```mermaid ``: diagram. Only for relationships or processes that a source describes. Put the citation in the line below the block. Wide diagrams scroll sideways on a phone, so prefer `flowchart TD` (top-down) when there are more than four steps.
-- Figures: `![caption](assets/file.png)` followed on the next line by `*Source: [S4](url)*`. Image credit goes in the ledger. An image alone in its paragraph becomes a captioned figure.
+- Figures: `![caption](assets/file.png)` followed in a pack on the next line by `*Source: [S4](url)*`. Image credit goes in the ledger. Condensed docs have no source line. An image alone in its paragraph becomes a captioned figure.
 
 ### Free-form blocks
 
@@ -49,7 +49,7 @@ Fenced blocks the renderer turns into components. **Prefer a component.** Reach 
 
 A fenced block whose info string has `key=value` pairs is treated as a directive; an unknown one makes rendering fail, so stick to the list above. Ordinary code blocks (` ```python `) stay code.
 
-Citations are reference-style links: `[S3]` in the text and `[S3]: url` definitions at the end of the file. The renderer shows them as references.
+In packs, citations are reference-style links: `[S3]` in the text and `[S3]: url` definitions at the end of the file. The renderer shows them as references. Condensed docs contain no citations and no reference definitions.
 
 ### Maths
 

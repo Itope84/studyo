@@ -5,7 +5,7 @@ The rule behind every Studyo skill: **facts come from sources, never from your o
 The rule is about facts, not wording. Two kinds of skill apply it differently:
 
 - **Assembling** (`enrich-document`, `enrich-topic`, `enrich-deep`, `answer`): you are reporting what sources say. Stay close to their words, and quote where exact wording matters.
-- **Teaching** (`condense`): you are explaining the pack's facts so a person understands them. The wording, order, examples and explanation are yours. The facts are not. See `condense/SKILL.md`.
+- **Teaching** (`condense`): you are explaining the pack's facts so a person understands them. The wording, order, examples and explanation are yours. The facts are not. Teaching writes no citations at all. See `condense/SKILL.md`.
 
 ## What counts as a fact
 
@@ -34,7 +34,7 @@ If you know something and no source in the ledger says it, leave it out as a fac
 - Add a locator after the citation when one exists: `[S3] p. 4`, `[S3] §2.1`.
 - `S<n>` is the ledger id. Ids never change once assigned and are never reused.
 - **Assembling:** cite at the end of the passage each source supports. Quote when exact wording matters (definitions, rules, figures, anything that could be misread) and keep quotes verbatim. Otherwise paraphrase faithfully.
-- **Teaching:** cite once per paragraph or small group of sentences, not after every sentence. Quotes are optional and rare.
+- **Teaching:** no citations, no source tags, no reference definitions. Quotes are optional and rare.
 - If sources disagree, show both views with their citations. Do not pick a winner without a source that does.
 - Time-sensitive claims carry the source's date in the ledger. Mention it in the text if it affects how far to trust the claim.
 - When you compare or combine figures from different places, check they measure the same thing before you set them side by side.
@@ -44,6 +44,8 @@ If you know something and no source in the ledger says it, leave it out as a fac
 The pack separates the original from additions with comment markers (see `render-contract.md`). Everything outside the original markers is an addition and needs a citation, except headings and connective text.
 
 ## Final checks before finishing any run
+
+Checks 1 to 4 apply to the assembling skills. A teaching skill writes no citations, so it runs check 5 only.
 
 1. Every `S<n>` in the text exists in the ledger with status `opened`, and has a reference definition at the bottom.
 2. Every URL in the text appears in the ledger.

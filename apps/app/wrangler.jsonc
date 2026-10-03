@@ -1,0 +1,9 @@
+// The web app on Cloudflare (Workers static assets). Build with `pnpm build:web`, deploy with `pnpm deploy:web`.
+{
+  "name": "studyo",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
