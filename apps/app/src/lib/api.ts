@@ -133,7 +133,11 @@ export const api = {
     request<TopicList>('GET', `/topics${includeArchived ? '?include_archived=true' : ''}`),
   topic: (id: string) => request<TopicDetail>('GET', `/topics/${enc(id)}`),
   createTopic: (body: CreateTopic) => request<TopicWithJob>('POST', '/topics', body),
-  createTopicFromPdf: (form: FormData) => request<TopicWithJob>('POST', '/topics', form),
+  createTopicFromPdf: (
+    form: FormData,
+    onProgress?: (p: UploadProgress) => void,
+    signal?: AbortSignal,
+  ) => upload<TopicWithJob>('/topics', form, onProgress, signal),
   updateTopic: (id: string, body: UpdateTopic) =>
     request<Topic>('PATCH', `/topics/${enc(id)}`, body),
   upload: (
@@ -181,7 +185,11 @@ export const api = {
     request<CourseList>('GET', `/courses${includeArchived ? '?include_archived=true' : ''}`),
   course: (id: string) => request<CourseDetail>('GET', `/courses/${enc(id)}`),
   createCourse: (body: CreateCourse) => request<CourseWithJob>('POST', '/courses', body),
-  createCourseFromPdf: (form: FormData) => request<CourseWithJob>('POST', '/courses', form),
+  createCourseFromPdf: (
+    form: FormData,
+    onProgress?: (p: UploadProgress) => void,
+    signal?: AbortSignal,
+  ) => upload<CourseWithJob>('/courses', form, onProgress, signal),
   updateCourse: (id: string, body: UpdateCourse) =>
     request<Course>('PATCH', `/courses/${enc(id)}`, body),
   redoOutline: (id: string) => request<Job>('POST', `/courses/${enc(id)}/outline`),

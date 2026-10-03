@@ -9,6 +9,7 @@ import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
 import { Sheet } from '@/components/Sheet';
 import { TopicBadge } from '@/components/status';
+import { UploadCard } from '@/components/UploadCard';
 import {
   Badge,
   Button,
@@ -928,47 +929,3 @@ function DeeperSheet({
 }
 
 /** An upload in flight: how much has been sent and how fast, so a slow connection is visible. */
-function UploadCard({
-  name,
-  size,
-  progress,
-  controller,
-}: {
-  name: string;
-  size: number;
-  progress: UploadProgress | null;
-  controller: AbortController;
-}) {
-  const { c } = useTheme();
-  const total = progress?.total || size;
-  const fraction = progress && total ? progress.sent / total : 0;
-  const mb = (n: number) => `${(n / 1024 / 1024).toFixed(1)} MB`;
-  const status = !progress
-    ? 'Starting…'
-    : fraction >= 0.999
-      ? 'Saving on the server…'
-      : `${Math.round(fraction * 100)}% · ${mb(progress.sent)} of ${mb(total)} · ${mb(progress.rate)}/s`;
-  return (
-    <View
-      style={{
-        marginTop: space.md,
-        borderRadius: radius.base,
-        backgroundColor: c.surface,
-        padding: space.md,
-        gap: space.sm,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Icon name="upload-file" size={18} tone="primary" />
-        <T variant="label" numberOfLines={1} style={{ flex: 1 }}>
-          Uploading {name}
-        </T>
-        <Button kind="ghost" label="Cancel" onPress={() => controller.abort()} />
-      </View>
-      <ProgressBar value={fraction} height={3} />
-      <T variant="meta" tone="lead">
-        {status}
-      </T>
-    </View>
-  );
-}

@@ -2,8 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Check, Input, Segmented } from '@/components/inputs';
+import { UploadCard } from '@/components/UploadCard';
 import { Button, Field, Header, Icon, Notice, Screen, T } from '@/components/ui';
-import { ApiError, api } from '@/lib/api';
+import { ApiError, api, type UploadProgress } from '@/lib/api';
 import { useOnline, useServerInfo } from '@/lib/hooks';
 import { keys, queryClient } from '@/lib/query';
 import { PDF_TYPES, type Picked, pickFile } from '@/lib/upload';
@@ -24,6 +25,10 @@ export default function Add() {
   const [pdf, setPdf] = useState<Picked | null>(null);
   const [enrich, setEnrich] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<{
+    progress: UploadProgress | null;
+    controller: AbortController;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { online, reason } = useOnline();
   const server = useServerInfo();
@@ -45,7 +50,13 @@ export default function Add() {
         if (mode === 'pdf' && pdf) {
           if (title.trim()) pdf.form.set('title', title.trim());
           if (goal.trim()) pdf.form.set('goal', goal.trim());
-          made = await api.createCourseFromPdf(pdf.form);
+          const controller = new AbortController();
+          setSending({ progress: null, controller });
+          made = await api.createCourseFromPdf(
+            pdf.form,
+            (p) => setSending({ progress: p, controller }),
+            controller.signal,
+          );
         } else {
           made = await api.createCourse({
             origin:
@@ -65,7 +76,13 @@ export default function Add() {
       if (mode === 'pdf' && pdf) {
         if (title.trim()) pdf.form.set('title', title.trim());
         pdf.form.set('enrich', String(enrich));
-        result = await api.createTopicFromPdf(pdf.form);
+        const controller = new AbortController();
+        setSending({ progress: null, controller });
+        result = await api.createTopicFromPdf(
+          pdf.form,
+          (p) => setSending({ progress: p, controller }),
+          controller.signal,
+        );
       } else if (mode === 'link') {
         result = await api.createTopic({
           origin: { type: 'link', link: link.trim() },
@@ -83,9 +100,11 @@ export default function Add() {
       await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
       router.replace(`/topic/${result.topic.id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : (e as Error).message);
+      if (!(e instanceof ApiError && e.code === 'aborted'))
+        setError(e instanceof ApiError ? e.message : (e as Error).message);
     } finally {
       setBusy(false);
+      setSending(null);
     }
   };
 
@@ -220,6 +239,14 @@ export default function Add() {
         )}
       </View>
 
+      {sending && pdf ? (
+        <UploadCard
+          name={pdf.name}
+          size={pdf.size}
+          progress={sending.progress}
+          controller={sending.controller}
+        />
+      ) : null}
       {error ? (
         <Notice
           tone="danger"
