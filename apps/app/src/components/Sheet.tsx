@@ -39,12 +39,15 @@ export function Sheet({
             bottom: 0,
             alignItems: 'center',
             maxHeight: '88%',
+            // Lets the card shrink to this height, so a long list scrolls inside it.
+            flexDirection: 'column',
           }}
         >
           <View
             style={{
               width: '100%',
               maxWidth: MAX_WIDTH,
+              flexShrink: 1,
               backgroundColor: c.canvas,
               borderTopLeftRadius: radius.lg,
               borderTopRightRadius: radius.lg,
@@ -68,7 +71,7 @@ export function Sheet({
               <IconButton name="close" label="Close" onPress={onClose} />
             </View>
             <ScrollView
-              style={{ flexGrow: 0 }}
+              style={{ flexGrow: 0, flexShrink: 1 }}
               contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: space.sm }}
               keyboardShouldPersistTaps="handled"
             >
