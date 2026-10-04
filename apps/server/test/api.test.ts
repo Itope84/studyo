@@ -404,8 +404,46 @@ describe('jobs', () => {
     expectSchema('Job', job);
     await waitFor(async () => (await jobStatus(job.id)).status === 'succeeded');
     const detail = (await s.call('GET', '/topics/pc-ca-mcts')).json;
-    const doc = detail.topic.resources.find((r: { id: string }) => r.id === 'condensed-all-demo');
-    expect(doc.html_path).toBe('outputs/condensed-all-demo.html');
+    const doc = detail.topic.resources.find((r: { depth?: string }) => r.depth === 'default');
+    expect(doc.html_path).toMatch(/^outputs\/condensed-all-.*\.html$/);
+    expect(doc.title).toBe('The demo in plain words');
+  });
+
+  async function condense(body: Record<string, unknown>) {
+    const job = (await s.call('POST', '/topics/pc-ca-mcts/jobs', { kind: 'condense', ...body }))
+      .json;
+    await waitFor(async () => (await jobStatus(job.id)).status === 'succeeded');
+    return (await s.call('GET', '/topics/pc-ca-mcts')).json.topic.resources as {
+      id: string;
+      type: string;
+      title: string;
+      depth?: string;
+      notes?: string | null;
+    }[];
+  }
+
+  it('never overwrites an earlier condensed doc, and labels a deep dive', async () => {
+    s = await makeServer();
+    const before = (await condense({})).filter((r) => r.type === 'condensed').length;
+    const docs = (await condense({ depth: 'longer', notes: 'stress the diagrams' })).filter(
+      (r) => r.type === 'condensed',
+    );
+    expect(docs.length).toBe(before + 1);
+    const deep = docs.find((r) => r.depth === 'longer');
+    expect(deep?.title).toBe('Deep dive: The demo in plain words');
+    expect(deep?.notes).toBe('stress the diagrams');
+  });
+
+  it('replaces a doc only when asked to, and deletes on request', async () => {
+    s = await makeServer();
+    const first = (await condense({})).find((r) => r.depth === 'default') as { id: string };
+    const docs = (await condense({ replace: first.id })).filter((r) => r.type === 'condensed');
+    expect(docs.some((r) => r.id === first.id)).toBe(false);
+    const gone = docs.find((r) => r.depth === 'default') as { id: string };
+    expect((await s.call('DELETE', `/topics/pc-ca-mcts/resources/${gone.id}`)).status).toBe(204);
+    const after = (await s.call('GET', '/topics/pc-ca-mcts')).json.topic.resources;
+    expect(after.some((r: { id: string }) => r.id === gone.id)).toBe(false);
+    expect((await s.call('DELETE', '/topics/pc-ca-mcts/resources/pack')).status).toBe(400);
   });
 
   it('reports a failed run and keeps the pack usable', async () => {

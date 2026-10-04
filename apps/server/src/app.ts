@@ -54,6 +54,7 @@ import { opencodeAdapter } from './adapters/opencode.ts';
 import { replayAdapter } from './adapters/replay.ts';
 import type { CliAdapter } from './adapters/types.ts';
 import { ChatStore } from './chat.ts';
+import { type CondenseParams, deleteCondensed, newOutputPath } from './condense.ts';
 import { type Config, VERSION } from './config.ts';
 import { Courses, summariseCourse } from './courses.ts';
 import { openDb } from './db.ts';
@@ -519,6 +520,19 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return c.json(await ensurePdf(library, id, resource));
   });
 
+  app.delete('/topics/:id/resources/:rid', async (c) => {
+    const id = c.req.param('id');
+    if (store.activeWork(id))
+      throw conflict('This topic has a job running. Wait for it, or cancel it first.');
+    const topic = await library.readTopic(id, { persist: false });
+    const resource = topic.resources.find((r) => r.id === c.req.param('rid'));
+    if (!resource) throw notFound('Document');
+    if (resource.type !== 'condensed') throw badRequest('Only condensed docs can be deleted.');
+    await deleteCondensed(library, id, resource);
+    bus.emit('topic.updated', { topic_id: id });
+    return c.body(null, 204);
+  });
+
   app.post('/topics/:id/mark-read', async (c) => {
     const id = c.req.param('id');
     const topic = await library.readTopic(id, { persist: false });
@@ -638,7 +652,26 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
       );
     }
     const params: Record<string, unknown> = {};
-    if (body.kind === 'condense') params.scope = body.scope ?? 'all';
+    if (body.kind === 'condense') {
+      const depth = body.depth ?? 'default';
+      const notes = body.notes?.trim() || null;
+      const rawScope = body.scope ?? 'all';
+      // A request with no parts ticked means the whole pack, steered by the request.
+      const scope = Array.isArray(rawScope) && rawScope.length === 0 ? 'all' : rawScope;
+      if (body.replace) {
+        const old = topic.resources.find((r) => r.id === body.replace);
+        if (!old || old.type !== 'condensed') throw badRequest('That doc cannot be replaced.');
+      }
+      const condense: CondenseParams = {
+        depth,
+        scope,
+        notes,
+        replace: body.replace ?? null,
+        before: topic.resources.filter((r) => r.type === 'condensed').map((r) => r.id),
+        output_path: newOutputPath(library.topicDir(id), depth, scope),
+      };
+      Object.assign(params, condense);
+    }
     if (body.kind === 'enrich-deep' && body.focus) params.focus = body.focus;
     return c.json(publicJob(enqueue(id, body.kind, params)), 202);
   });

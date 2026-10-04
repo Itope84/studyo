@@ -170,6 +170,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topics/{topic_id}/resources/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                resource_id: components["parameters"]["ResourceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a condensed doc
+         * @description Removes the document, its rendered HTML and PDF, and its reading progress. Only condensed docs can be deleted this way.
+         */
+        delete: operations["deleteResource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topics/{topic_id}/resources/{resource_id}/rendered": {
         parameters: {
             query?: never;
@@ -928,6 +951,12 @@ export interface components {
             description?: string | null;
             /** @description Derived by the server for packs and condensed docs, at about 230 words a minute. */
             read_minutes?: number | null;
+            /** @description For condensed docs made by the app, how deep the guide goes. Docs without it read as default. */
+            depth?: components["schemas"]["CondenseDepth"] | null;
+            /** @description For condensed docs made by the app, what the run covered (`all` or pack section ids). */
+            scope?: "all" | string[] | null;
+            /** @description For condensed docs made by the app, the learner's request that steered the run. */
+            notes?: string | null;
         };
         Learning: {
             goal?: string;
@@ -1143,6 +1172,11 @@ export interface components {
         JobDetail: components["schemas"]["Job"] & {
             log: components["schemas"]["LogLine"][];
         };
+        /**
+         * @description `default` runs the condense skill (an overview), `longer` runs condense-deep (a deep dive).
+         * @enum {string}
+         */
+        CondenseDepth: "default" | "longer";
         CreateJob: {
             /** @enum {string} */
             kind: "enrich" | "enrich-deep" | "condense";
@@ -1150,6 +1184,11 @@ export interface components {
             scope?: "all" | string[];
             /** @description For enrich-deep, what to go deeper on */
             focus?: string;
+            depth?: components["schemas"]["CondenseDepth"];
+            /** @description For condense, what the learner wants covered or stressed. Steers focus only; facts still come from the pack. */
+            notes?: string;
+            /** @description For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything. */
+            replace?: string;
         };
         /** @description Written by a skill when it needs the learner. The job waits in needs_input until answered. */
         QuestionSet: {
@@ -2001,6 +2040,31 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Resource"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: components["parameters"]["TopicId"];
+                resource_id: components["parameters"]["ResourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];

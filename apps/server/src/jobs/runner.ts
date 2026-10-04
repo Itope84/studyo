@@ -4,6 +4,7 @@ import type { AnswerSet, CliId, JobKind, QuestionSet, Settings, Topic } from '@s
 import { courseIdOf, isCourseScope } from '@studyo/api';
 import type { AdapterEvent, CliAdapter, RunRequest } from '../adapters/types.ts';
 import type { ChatStore } from '../chat.ts';
+import { type CondenseParams, finalizeCondense, guardManifest } from '../condense.ts';
 import type { Courses } from '../courses.ts';
 import type { EventBus } from '../events.ts';
 import type { Library } from '../library.ts';
@@ -159,9 +160,22 @@ export class Runner {
         if (!job) return;
         const controller = new AbortController();
         this.running.set(lane, { jobId: job.id, controller });
+        const guard = guardManifest(this.d.library, job.topic_id);
         try {
           await this.run(job, controller);
+          if (guard())
+            this.d.store.log(
+              job.id,
+              'system',
+              'The run broke topic.json; restored the copy from before it.',
+            );
         } catch (e) {
+          if (guard())
+            this.d.store.log(
+              job.id,
+              'system',
+              'The run broke topic.json; restored the copy from before it.',
+            );
           if (this.stopped) return; // shutting down: the database may already be closed
           this.d.store.log(job.id, 'system', `Runner error: ${(e as Error).stack ?? e}`);
           this.d.store.update(job.id, {
@@ -458,7 +472,12 @@ export class Runner {
       if (hasPack) await library.setStatus(job.topic_id, 'ready');
       else return this.fail(job, 'The run finished without producing a pack.');
     }
-    const problems = renderTopic(library, job.topic_id, after.resources);
+    let resources = after.resources;
+    if (job.kind === 'condense' && job.params?.output_path) {
+      await finalizeCondense(library, job.topic_id, job.params as unknown as CondenseParams);
+      resources = (await library.readTopic(job.topic_id, { persist: false })).resources;
+    }
+    const problems = renderTopic(library, job.topic_id, resources);
     for (const p of problems) store.log(job.id, 'system', `Render problem: ${p}`);
     store.log(job.id, 'progress', 'Done');
     const done = store.update(job.id, {

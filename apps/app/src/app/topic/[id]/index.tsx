@@ -8,6 +8,7 @@ import { DownloadSheet } from '@/components/DownloadSheet';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
 import { Sheet } from '@/components/Sheet';
+import { SwipeRow } from '@/components/SwipeRow';
 import { TopicBadge } from '@/components/status';
 import { UploadCard } from '@/components/UploadCard';
 import {
@@ -41,6 +42,8 @@ export default function TopicScreen() {
   const activeJobs = useActiveJobs();
   const { online, reason } = useOnline();
   const server = useServerInfo();
+  const [regen, setRegen] = useState<Resource | null>(null);
+  const [removing, setRemoving] = useState<Resource | null>(null);
   const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more' | 'reenrich'>(
     null,
   );
@@ -299,7 +302,10 @@ export default function TopicScreen() {
               kind="ghost"
               label="Condensed doc"
               icon="add"
-              onPress={() => setSheet('condense')}
+              onPress={() => {
+                setRegen(null);
+                setSheet('condense');
+              }}
               disabled={!online || busyTopic}
             />
           ) : undefined
@@ -320,6 +326,11 @@ export default function TopicScreen() {
             progress={progress}
             online={online}
             onDownload={() => setDownload(r)}
+            onRegenerate={() => {
+              setRegen(r);
+              setSheet('condense');
+            }}
+            onDelete={() => setRemoving(r)}
           />
         ))
       )}
@@ -425,7 +436,10 @@ export default function TopicScreen() {
         onClose={() => setSheet(null)}
         topicId={id}
         packId={pack?.id ?? null}
+        isCourse={!!topic.course}
+        regenerate={regen}
       />
+      <DeleteDocSheet doc={removing} onClose={() => setRemoving(null)} topicId={id} />
       <ReenrichSheet
         open={sheet === 'reenrich'}
         onClose={() => setSheet(null)}
@@ -500,16 +514,20 @@ function DocRow({
   progress,
   online,
   onDownload,
+  onRegenerate,
+  onDelete,
 }: {
   topicId: string;
   r: Resource;
   progress: Progress;
   online: boolean;
   onDownload: () => void;
+  onRegenerate: () => void;
+  onDelete: () => void;
 }) {
   const item = progress.items[r.id];
   const fraction = item?.done ? 1 : (item?.position ?? 0);
-  return (
+  const row = (
     <Row
       title={r.title}
       leading={
@@ -527,7 +545,11 @@ function DocRow({
             </T>
           ) : null}
           <T variant="meta" tone="lead">
-            {r.type === 'pack' ? 'Study pack' : 'Condensed doc'}
+            {r.type === 'pack'
+              ? 'Study pack'
+              : r.depth === 'longer'
+                ? 'Deep dive'
+                : 'Condensed doc'}
             {r.read_minutes ? ` · ${r.read_minutes} min read` : ''}
             {item?.done ? ' · Read' : item ? ` · ${Math.round(fraction * 100)}% read` : ''}
           </T>
@@ -536,17 +558,49 @@ function DocRow({
       }
       meta={item?.done ? <Icon name="check-circle" size={18} tone="sage" /> : undefined}
       trailing={
-        <IconButton
-          name="file-download"
-          label={`Download ${r.title}`}
-          onPress={onDownload}
-          disabled={!online}
-        />
+        // A pack has one action, so it stays on the row. Condensed docs keep all theirs behind the swipe.
+        r.type === 'pack' ? (
+          <IconButton
+            name="file-download"
+            label={`Download ${r.title}`}
+            onPress={onDownload}
+            disabled={!online}
+          />
+        ) : undefined
       }
       onPress={() => router.push(`/topic/${topicId}/read/${r.id}`)}
       disabled={!online}
       disabledReason="Needs the server"
     />
+  );
+  if (r.type !== 'condensed') return row;
+  return (
+    <SwipeRow
+      name={r.title}
+      actions={[
+        {
+          icon: 'file-download',
+          label: `Download ${r.title}`,
+          onPress: onDownload,
+          disabled: !online,
+        },
+        {
+          icon: 'autorenew',
+          label: `Regenerate ${r.title}`,
+          onPress: onRegenerate,
+          disabled: !online,
+        },
+        {
+          icon: 'delete-outline',
+          label: `Delete ${r.title}`,
+          onPress: onDelete,
+          tone: 'danger',
+          disabled: !online,
+        },
+      ]}
+    >
+      {row}
+    </SwipeRow>
   );
 }
 
@@ -783,22 +837,45 @@ function RenameSheet({
   );
 }
 
-/** Choose what the condensed doc covers. The level questions come next, from the job. */
+/**
+ * Choose how deep the doc goes and what it covers. The level questions come next, from the job.
+ * A new doc never replaces another; regenerating one does, once the new run succeeds.
+ */
 function CondenseSheet({
   open,
   onClose,
   topicId,
   packId,
+  isCourse,
+  regenerate,
 }: {
   open: boolean;
   onClose: () => void;
   topicId: string;
   packId: string | null;
+  isCourse: boolean;
+  regenerate: Resource | null;
 }) {
+  const [depth, setDepth] = useState<'default' | 'longer'>('default');
   const [scope, setScope] = useState<'all' | 'parts'>('all');
   const [picked, setPicked] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Fill the form each time the sheet opens: from the doc being regenerated, else the course default.
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  const key = open ? `${regenerate?.id ?? 'new'}` : null;
+  if (key !== filledFor) {
+    setFilledFor(key);
+    if (key) {
+      setDepth(regenerate ? (regenerate.depth ?? 'default') : isCourse ? 'longer' : 'default');
+      const parts = Array.isArray(regenerate?.scope) ? regenerate.scope : [];
+      setScope(parts.length ? 'parts' : 'all');
+      setPicked(parts);
+      setNotes(regenerate?.notes ?? '');
+      setError(null);
+    }
+  }
   const outline = useQuery<Rendered>({
     queryKey: keys.rendered(topicId, packId ?? ''),
     queryFn: () => api.rendered(topicId, packId as string),
@@ -809,25 +886,27 @@ function CondenseSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Create a condensed doc"
+      title={regenerate ? 'Regenerate this doc' : 'Create a condensed doc'}
       footer={
         <Button
-          label="Start"
-          icon="auto-awesome"
+          label={regenerate ? 'Regenerate' : 'Start'}
+          icon={regenerate ? 'autorenew' : 'auto-awesome'}
           busy={busy}
-          disabled={scope === 'parts' && picked.length === 0}
+          disabled={scope === 'parts' && picked.length === 0 && !notes.trim()}
           onPress={async () => {
             setBusy(true);
             setError(null);
             try {
-              const job = await api.startJob(topicId, {
+              await api.startJob(topicId, {
                 kind: 'condense',
+                depth,
                 scope: scope === 'all' ? 'all' : picked,
+                ...(notes.trim() ? { notes: notes.trim() } : {}),
+                ...(regenerate ? { replace: regenerate.id } : {}),
               });
               await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
               await queryClient.invalidateQueries({ queryKey: keys.topic(topicId) });
               onClose();
-              void job;
             } catch (e) {
               setError((e as Error).message);
             } finally {
@@ -838,8 +917,22 @@ function CondenseSheet({
       }
     >
       <T variant="bodySmall" tone="lead" style={{ marginBottom: space.md }}>
-        An easy-to-follow version of the pack, written at your level. It may ask a quick question
-        about what you already know first.
+        {regenerate
+          ? 'Writes a fresh version with the settings below. When it finishes it replaces this doc and its reading position.'
+          : 'An easy-to-follow version of the pack, written at your level. It is added next to your other docs and never replaces one. It may ask a quick question about what you already know first.'}
+      </T>
+      <Segmented
+        value={depth}
+        onChange={setDepth}
+        options={[
+          { value: 'default', label: 'Default' },
+          { value: 'longer', label: 'Deep dive' },
+        ]}
+      />
+      <T variant="meta" tone="lead" style={{ marginTop: space.xs, marginBottom: space.md }}>
+        {depth === 'longer'
+          ? 'Every idea shown working, with predict-and-reveal checks. Longer to write and to read.'
+          : 'An overview of the main ideas.'}
       </T>
       <Segmented
         value={scope}
@@ -863,8 +956,67 @@ function CondenseSheet({
               />
             </View>
           ))}
+          <T variant="meta" tone="lead" style={{ marginTop: space.md, marginBottom: space.xs }}>
+            Anything specific you want covered or stressed? Optional. Without ticking parts it
+            applies to the whole pack.
+          </T>
+          <Input
+            area
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="For example: focus on the worked examples"
+            accessibilityLabel="What to cover or stress"
+          />
         </View>
       ) : null}
+      {error ? <Notice tone="danger" title={error} /> : null}
+    </Sheet>
+  );
+}
+
+/** Confirm before removing a condensed doc. */
+function DeleteDocSheet({
+  doc,
+  onClose,
+  topicId,
+}: {
+  doc: Resource | null;
+  onClose: () => void;
+  topicId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Sheet
+      open={!!doc}
+      onClose={onClose}
+      title="Delete this doc?"
+      footer={
+        <Button
+          label="Delete"
+          icon="delete-outline"
+          busy={busy}
+          onPress={async () => {
+            if (!doc) return;
+            setBusy(true);
+            setError(null);
+            try {
+              await api.deleteResource(topicId, doc.id);
+              await queryClient.invalidateQueries({ queryKey: keys.topic(topicId) });
+              onClose();
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      }
+    >
+      <T variant="bodySmall" tone="lead">
+        {doc?.title} and your reading position in it will be removed. The study pack and your other
+        docs stay.
+      </T>
       {error ? <Notice tone="danger" title={error} /> : null}
     </Sheet>
   );

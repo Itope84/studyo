@@ -206,6 +206,8 @@ export const api = {
     request<Quiz>('GET', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
   createQuiz: (scope: string, body: CreateQuiz) =>
     request<QuizWithJob>('POST', `/topics/${enc(scope)}/quizzes`, body),
+  deleteResource: (topicId: string, resourceId: string) =>
+    request<void>('DELETE', `/topics/${enc(topicId)}/resources/${enc(resourceId)}`),
   deleteQuiz: (scope: string, id: string) =>
     request<void>('DELETE', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
   submitAttempt: (scope: string, id: string, body: SubmitAttempt) =>

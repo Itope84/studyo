@@ -280,6 +280,22 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /topics/{topic_id}/resources/{resource_id}:
+    parameters:
+      - $ref: '#/components/parameters/TopicId'
+      - $ref: '#/components/parameters/ResourceId'
+    delete:
+      tags: [topics]
+      summary: Delete a condensed doc
+      description: Removes the document, its rendered HTML and PDF, and its reading progress. Only condensed docs can be deleted this way.
+      operationId: deleteResource
+      responses:
+        '204': { description: Deleted }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /topics/{topic_id}/resources/{resource_id}/rendered:
     parameters:
       - $ref: '#/components/parameters/TopicId'
@@ -1369,6 +1385,22 @@ components:
         read_minutes:
           type: [integer, 'null']
           description: Derived by the server for packs and condensed docs, at about 230 words a minute.
+        depth:
+          oneOf:
+            - $ref: '#/components/schemas/CondenseDepth'
+            - type: 'null'
+          description: For condensed docs made by the app, how deep the guide goes. Docs without it read as default.
+        scope:
+          description: For condensed docs made by the app, what the run covered (`all` or pack section ids).
+          oneOf:
+            - type: string
+              const: all
+            - type: array
+              items: { type: string }
+            - type: 'null'
+        notes:
+          type: [string, 'null']
+          description: For condensed docs made by the app, the learner's request that steered the run.
 
     Learning:
       type: object
@@ -1691,6 +1723,11 @@ components:
               type: array
               items: { $ref: '#/components/schemas/LogLine' }
 
+    CondenseDepth:
+      type: string
+      enum: [default, longer]
+      description: '`default` runs the condense skill (an overview), `longer` runs condense-deep (a deep dive).'
+
     CreateJob:
       type: object
       required: [kind]
@@ -1706,6 +1743,14 @@ components:
             - type: array
               items: { type: string }
         focus: { type: string, description: 'For enrich-deep, what to go deeper on' }
+        depth:
+          $ref: '#/components/schemas/CondenseDepth'
+        notes:
+          type: string
+          description: 'For condense, what the learner wants covered or stressed. Steers focus only; facts still come from the pack.'
+        replace:
+          type: string
+          description: 'For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything.'
 
     QuestionSet:
       type: object

@@ -120,6 +120,7 @@ test('closing the app mid-job and reopening it shows the waiting question', asyn
 test('download a document as PDF for NotebookLM', async ({ page }) => {
   await connect(page);
   await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+  await v(page.getByRole('button', { name: /^Show actions for Merkle Tree Certificates/ })).click();
   await v(page.getByRole('button', { name: /^Download Merkle Tree Certificates/ })).click();
   await expect(v(page.getByText('Best for NotebookLM'))).toBeVisible();
   await shot(page, '12-download-sheet');
@@ -273,4 +274,42 @@ test('write a take-home from your own context and get it reviewed', async ({ pag
     timeout: 30_000,
   });
   await shot(page, '32-takehome-review');
+});
+
+test('make a deep dive next to a condensed doc, regenerate it, delete it', async ({ page }) => {
+  await connect(page);
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+
+  // A new doc is added beside the existing ones.
+  await v(page.getByRole('button', { name: 'Condensed doc' })).click();
+  await shot(page, '07a-condense-sheet');
+  await v(page.getByRole('button', { name: 'Deep dive', exact: true })).click();
+  await v(page.getByRole('button', { name: 'Selected parts' })).click();
+  await expect(v(page.getByLabel('What to cover or stress'))).toBeVisible();
+  await v(page.getByRole('button', { name: 'Whole pack' })).click();
+  await v(page.getByRole('button', { name: /Start$/ })).click();
+  await expect(v(page.getByText(/^Deep dive: /))).toBeVisible({ timeout: 30_000 });
+  await expect(v(page.getByText(/Condensed doc ·/))).toBeVisible();
+  await shot(page, '07-deep-dive-added');
+
+  // Regenerate reopens the sheet with this doc's settings and replaces it.
+  await v(page.getByRole('button', { name: /^Show actions for Deep dive/ })).click();
+  await shot(page, '07b-actions-open');
+  await expect(v(page.getByRole('button', { name: /^Download Deep dive/ }))).toBeVisible();
+  await v(page.getByRole('button', { name: /^Regenerate Deep dive/ })).click();
+  await expect(v(page.getByText('Regenerate this doc', { exact: true }))).toBeVisible();
+  await v(page.getByRole('button', { name: /Regenerate$/ })).click();
+  await expect(v(page.getByRole('button', { name: 'Condensed doc' }))).toBeDisabled();
+  await expect(v(page.getByRole('button', { name: 'Condensed doc' }))).toBeEnabled({
+    timeout: 30_000,
+  });
+  await expect(v(page.getByText(/^Deep dive: /))).toBeVisible();
+
+  // Delete asks first, then removes only that doc.
+  await v(page.getByRole('button', { name: /^Show actions for Deep dive/ })).click();
+  await v(page.getByRole('button', { name: /^Delete Deep dive/ })).click();
+  await v(page.getByRole('button', { name: /Delete$/ })).click();
+  await expect(page.getByText(/^Deep dive: /).filter({ visible: true })).toHaveCount(0, {
+    timeout: 15_000,
+  });
 });
