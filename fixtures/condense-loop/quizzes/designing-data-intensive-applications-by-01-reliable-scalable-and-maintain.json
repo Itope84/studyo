@@ -1,0 +1,220 @@
+{
+ "topic": "designing-data-intensive-applications-by-01-reliable-scalable-and-maintain",
+ "depth": "default",
+ "profile": "developer",
+ "held_out": true,
+ "frozen": "2026-10-04",
+ "note": "Concepts come from the chapter's teaches list, split finer. Keys come from the pack only.",
+ "concepts": [
+  {
+   "id": "D1",
+   "name": "Data systems and data-intensive applications",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What makes an application data-intensive rather than compute-intensive?",
+     "key": "Raw CPU power is rarely the limit. The bigger problems are the amount of data, the complexity of data, and the speed at which it changes."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "An app uses a main database, a Memcached cache and a separate Elasticsearch server. Whose job is it to keep the cache and index in sync, and what does that make you?",
+     "key": "The application code's. Combined, they form a new special-purpose data system built from general-purpose parts, behind an API that hides the details. You are a data system designer, not only an application developer."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does the chapter group databases, queues and caches under one name, 'data systems'?",
+     "key": "The boundaries are blurring (Redis is a datastore also used as a queue, Kafka is a queue with database-like durability), and many applications need several tools stitched together."
+    }
+   ]
+  },
+  {
+   "id": "D2",
+   "name": "Faults versus failures",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the difference between a fault and a failure, and what does reliability mean?",
+     "key": "A fault is one component deviating from its spec. A failure is the system as a whole stopping providing the required service. Reliability is continuing to work correctly even when things go wrong."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A disk dies but the server keeps running because of RAID. Is that a fault, a failure, or both?",
+     "key": "A fault but not a failure. Fault-tolerance mechanisms aim to stop faults causing failures."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does the chapter call 'fault-tolerant' slightly misleading, and why might you trigger faults on purpose?",
+     "key": "You cannot tolerate every kind of fault (the black-hole example), so only certain types make sense. Deliberate faults, like Netflix's Chaos Monkey, keep the fault-tolerance machinery exercised, since many critical bugs come from poor error handling."
+    }
+   ]
+  },
+  {
+   "id": "D3",
+   "name": "Hardware and software faults",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How do hardware faults and software errors differ in how they tend to occur?",
+     "key": "Hardware faults tend to be random and independent of each other. Software errors are systematic and correlated across nodes."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A cluster has 10,000 disks, each with a mean time to failure of 10 to 50 years. About how many disks should you expect to fail per day?",
+     "key": "About one per day."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why do software faults tend to cause more system failures than hardware faults?",
+     "key": "They are correlated across nodes: for example a bug that crashes every instance on a particular bad input, like the leap second of June 30, 2012. They often lie dormant until unusual circumstances break an assumption."
+    }
+   ]
+  },
+  {
+   "id": "D4",
+   "name": "Human error",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What approaches does the chapter combine to make systems reliable despite human error?",
+     "key": "Design to minimize opportunities for error (good abstractions and interfaces, but not so restrictive people work around them), decouple where mistakes are made from where they cause failures (sandboxes), test thoroughly, allow quick recovery, set up detailed monitoring (telemetry), and good management and training."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A configuration change takes down production. Which of the chapter's measures would have limited the damage?",
+     "key": "Quick rollback of configuration changes, gradual rollout so a bug affects only a small subset of users, testing in a sandbox first, and monitoring for early warning signals. (Config errors by operators were the leading cause of outages in one study; hardware faults played a role in 10-25%.)"
+    }
+   ]
+  },
+  {
+   "id": "D5",
+   "name": "Describing load",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a load parameter? Give examples.",
+     "key": "A number describing the current load on the system; the right choice depends on the architecture. Examples: requests per second to a web server, read/write ratio in a database, simultaneously active users in a chat room, cache hit rate."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "Twitter first built the home timeline by merging tweets at read time, then switched to a per-user timeline cache filled at write time. Why did it switch, and what did the switch cost?",
+     "key": "Home timeline reads were far more frequent than tweet posts (almost two orders of magnitude), so it is better to do more work on write and less on read. The cost: a tweet is delivered to about 75 followers on average, so 4.6k tweets per second become 345k writes per second, and some users have over 30 million followers."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is the distribution of followers per user the key load parameter, and what is the hybrid Twitter moved to?",
+     "key": "It determines the fan-out load, not the tweet rate. Hybrid: most users' tweets are fanned out when posted, but users with very many followers (celebrities) are excepted, and their tweets are fetched at read time and merged in."
+    }
+   ]
+  },
+  {
+   "id": "D6",
+   "name": "Response time and percentiles",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the difference between response time and latency?",
+     "key": "Response time is what the client sees: the service time plus network and queueing delays. Latency is the duration a request is waiting to be handled."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A service reports a median response time of 200 ms and a 99th percentile of 1 s. What does each number tell you?",
+     "key": "Half of requests complete in under 200 ms and half take longer. 99 in 100 requests take under 1 s, and 1 in 100 takes 1 s or more."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why are percentiles usually better than the mean for describing response time?",
+     "key": "The mean does not tell you how many users experienced a given delay. Percentiles show the typical case (median) and the outliers (p95, p99, p999 tail latencies), which directly affect user experience; Amazon uses p99.9 because the slowest requests are often from the most valuable customers."
+    }
+   ]
+  },
+  {
+   "id": "D7",
+   "name": "Tail latency amplification and measuring",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is tail latency amplification?",
+     "key": "When one end-user request needs several backend calls, it must wait for the slowest. Even if only a small percentage of backend calls are slow, a higher proportion of end-user requests end up slow."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Why measure response times on the client side, and what is wrong with a load-test client that waits for each response before sending the next request?",
+     "key": "Head-of-line blocking: slow requests hold up later ones, and the client sees the queueing delay the server does not. A waiting client keeps queues artificially short in the test and skews the measurements; it should keep sending independently of response time."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "A dashboard shows the 99th percentile for each machine and averages them into one number. What is wrong with that?",
+     "key": "Averaging percentiles is mathematically meaningless. The right way to aggregate is to add the histograms."
+    }
+   ]
+  },
+  {
+   "id": "D8",
+   "name": "Scaling approaches",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What are scaling up and scaling out, and what does 'elastic' mean?",
+     "key": "Scaling up (vertical) is moving to a more powerful machine. Scaling out (horizontal) is distributing load across multiple smaller machines, also called shared-nothing. Elastic systems add resources automatically when they detect load increase; others are scaled manually."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A young startup is deciding how to scale its database. What does the chapter suggest?",
+     "key": "Common wisdom is to keep the database on a single node (scale up) until scaling cost or high-availability needs force distribution, because moving stateful data systems to distributed setups adds complexity. In an early-stage startup, iterating on product features usually matters more than scaling to a hypothetical load."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is there no 'magic scaling sauce'?",
+     "key": "The right architecture depends on the application's load parameters and which operations will be common or rare. For example, 100,000 requests per second of 1 kB looks very different from 3 requests per minute of 2 GB, though the throughput is the same. If the assumptions are wrong, scaling effort is wasted or counterproductive."
+    }
+   ]
+  },
+  {
+   "id": "D9",
+   "name": "Maintainability: operability, simplicity, evolvability",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Name the three maintainability principles and what each means.",
+     "key": "Operability: make it easy for operations teams to keep the system running smoothly. Simplicity: make it easy for new engineers to understand the system by removing complexity (not the same as a simple user interface). Evolvability: make it easy to change the system for unanticipated use cases."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What is accidental complexity, and what is one of the best tools for removing it?",
+     "key": "Complexity not inherent in the problem as users see it, arising only from the implementation. Abstraction, which hides implementation detail behind a clean facade (for example SQL hides on-disk structures, concurrent clients and crash inconsistencies)."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Operations work can be automated. Why does the chapter still say operability matters?",
+     "key": "'Good operations can often work around the limitations of bad software, but good software cannot run reliably with bad operations.' Humans must set up and verify the automation, and good operability means making routine tasks easy so teams can focus on high-value work."
+    }
+   ]
+  }
+ ]
+}
