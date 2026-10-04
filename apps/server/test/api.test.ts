@@ -370,8 +370,30 @@ describe('jobs', () => {
     expect(reply.text).not.toContain('Let me check');
     expect(reply.text).not.toContain('suggest-enrich');
     expect(reply.suggest_enrich).toBe('How MTCs handle revocation');
+    expect(reply.suggest_quiz).toBe('Inclusion proofs');
+    expect(reply.text).not.toContain('suggest-quiz');
     const deltas = (s.bus.replay(0) ?? []).filter((e) => e.type === 'chat.delta');
     expect(deltas.length).toBeGreaterThan(3);
+  });
+
+  it('stops a reply in progress when a new message is sent, keeping its text', async () => {
+    s = await makeServer();
+    const first = await s.call('POST', '/topics/pc-ca-mcts/chat', { text: 'First question' });
+    expect(first.status).toBe(202);
+    await waitFor(async () => {
+      const h = (await s.call('GET', '/topics/pc-ca-mcts/chat')).json;
+      return h.messages.at(-1)?.status === 'streaming' && h.messages.at(-1).text.length > 0;
+    });
+    const second = await s.call('POST', '/topics/pc-ca-mcts/chat', { text: 'Second question' });
+    expect(second.status).toBe(202);
+    await waitFor(async () => (await jobStatus(second.json.job.id)).status === 'succeeded');
+    const history = (await s.call('GET', '/topics/pc-ca-mcts/chat')).json;
+    expectSchema('ChatHistory', history);
+    const stopped = history.messages.find((m: { id: string }) => m.id === first.json.assistant.id);
+    expect(stopped.status).toBe('stopped');
+    expect(stopped.text.length).toBeGreaterThan(0);
+    expect((await jobStatus(first.json.job.id)).status).toBe('cancelled');
+    expect(history.messages.at(-1).status).toBe('complete');
   });
 
   it('writes a condensed doc and renders it', async () => {

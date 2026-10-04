@@ -55,6 +55,7 @@ export class ChatStore {
       created,
       job_id: null,
       suggest_enrich: null,
+      suggest_quiz: null,
       error: null,
     };
     chat.messages.push(user, assistant);

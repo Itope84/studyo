@@ -59,9 +59,10 @@ test('ask in chat and get a cited answer with an enrich offer', async ({ page })
   await v(page.getByLabel('Your question')).fill('What replaces the certificate chain?');
   await v(page.getByRole('button', { name: 'Send' })).click();
   await expect(v(page.getByText(/replace a chain of signatures/))).toBeVisible({ timeout: 20_000 });
-  await expect(v(page.getByText("The pack doesn't cover this yet"))).toBeVisible({
+  await expect(v(page.getByText('Add this to the pack?'))).toBeVisible({
     timeout: 20_000,
   });
+  await expect(v(page.getByText('Quiz yourself on this?'))).toBeVisible();
   await expect(page.getByText('Let me check the pack.')).toHaveCount(0);
   await shot(page, '07-chat');
 });

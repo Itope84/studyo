@@ -47,6 +47,8 @@ export interface PromptInput {
   courseOrigin?: string;
   courseGoal?: string | null;
   courseOriginLine?: string | null;
+  /** For chat: a short note about the learner (see chat-context.ts). */
+  context?: string | null;
   params: Record<string, unknown>;
 }
 
@@ -69,10 +71,11 @@ export function startPrompt(i: PromptInput): string {
   }
   if (kind === 'answer') {
     lines.push('- interactive: false');
+    if (i.context) lines.push('', i.context);
     lines.push('', 'The learner asks:', '', String(params.question ?? ''));
     lines.push(
       '',
-      'Reply with the answer only (Markdown, reference-style citations). It is shown in the app as the chat reply.',
+      'Reply with the answer only (Markdown). It is shown in the app as the chat reply.',
     );
     return lines.join('\n');
   }
@@ -136,12 +139,21 @@ export function answersPrompt(answers: AnswerSet): string {
 }
 
 const SUGGEST = /^\s*\[studyo:suggest-enrich\]\s*(.+)\s*$/m;
+const SUGGEST_QUIZ = /^\s*\[studyo:suggest-quiz\]\s*(.+)\s*$/m;
 
-/** Split the chat reply from the skill's machine line, if any. */
-export function parseAnswer(text: string): { text: string; suggest: string | null } {
-  const match = SUGGEST.exec(text);
-  if (!match) return { text: text.trim(), suggest: null };
-  return { text: text.replace(SUGGEST, '').trim(), suggest: (match[1] ?? '').trim() };
+/** Split the chat reply from the skill's machine lines, if any. */
+export function parseAnswer(text: string): {
+  text: string;
+  suggest: string | null;
+  quiz: string | null;
+} {
+  const enrich = SUGGEST.exec(text);
+  const quiz = SUGGEST_QUIZ.exec(text);
+  return {
+    text: text.replace(SUGGEST, '').replace(SUGGEST_QUIZ, '').trim(),
+    suggest: enrich ? (enrich[1] ?? '').trim() : null,
+    quiz: quiz ? (quiz[1] ?? '').trim() : null,
+  };
 }
 
 /** Split "6/9 sources: …" into the step and the text. */

@@ -57,7 +57,7 @@ skills/, docs/, scripts/
 
 ## Next up (in this order)
 
-1. **Grill the chat rework.** Run `/grill-me` (aihero.dev/skills-grill-me) in a fresh conversation, with plan mode off and the best model, on slice 8 below. Start from the learner's raw statement quoted there. The aim is a decided design for the `answer` skill (what it may use, in what order, how it explains), not code. Then build it. Not started.
+1. **Chat rework (slice 8): built Oct 4, 2026, not deployed.** Grilled and decided; skill rewritten, server and app changed. Still to do: deploy, then use it for a few days and read real answers. The `answer` skill has only been run against Claude Code in side-by-side tests (OpenCode in a real server run).
 2. **A self-improving loop for the `condense` skill, in two moves.** Grill the problem first, then build the loop. Not started.
    - **Move 1: depth.** For technical material (courses, code, systems), `condense` reads as a summary where it should teach. The learner's observation, Oct 4, 2026. First check, from the library: Rust ch 2 is 10.7k words of pack condensed to 2.7k, DDIA ch 2 is 13.8k to 4.2k (about a quarter to a third), and the Rust one ends with a section called "What this guide leaves out". Likely causes in the skill: it was shaped on a short article (the K2 test), so "one thread" and "ideas, not sources" favour narrative; "lookup material, leave it out" drops detail that a reader needs to do the work; worked examples and code are optional ("most parts need only good prose"); nothing requires every concept in a chapter's `teaches` to be covered; and the facts-from-the-pack rule stops it going deeper than the pack. Questions for the grilling: is this one skill with a depth setting, or two (an overview that is today's `condense`, and an in-depth study guide with worked code, step-by-step builds, predict-the-output checks and a coverage check against `teaches`)? Should depth be chosen per run, per topic kind, or by the learner's goal?
    - **Move 2: the loop.** Draft, critique against a defined bar, revise, keep what scores better, so it writes like the best and most engaging technical communicators. Open for the grilling: what the bar is and who judges it, which sample material to test on (include one code-heavy chapter, one concept-heavy chapter and one short article), how to stop, what a run costs. Depth should be part of the bar, so the loop does not polish a summary.
@@ -152,11 +152,14 @@ Raw problem statement from the user (Oct 3, 2026), kept verbatim:
 Direction: not "pack only". Explain, don't quote. Order: pack and sources first, then inference from what the document implies, then research (web) and come back to explain, then model knowledge as a last resort, labelled but never blocked. Keep the "enrich more" offer. Not started; separate skill work.
 
 - [x] Collect what felt bad in real use (the statement above)
-- [ ] Teach, don't only retrieve: allow explaining a covered idea differently, a worked example, checking understanding
-- [ ] Use the profile and reading position ("you are in section X")
-- [ ] Decide how strict "pack only" is when the pack misses a basic fact (offer enrich, or answer labelled as outside the sources)
-- [ ] Scopes: topic, chapter (falls back to earlier chapters), course (routes via `index.md`)
-- [ ] Verify with both CLIs and the replay adapter
+- [x] Teach, don't only retrieve: allow explaining a covered idea differently, a worked example, checking understanding
+- [x] Use the profile and reading position ("you are in section X"): the server puts a short note about the learner in front of each question
+- [x] Decide how strict "pack only" is when the pack misses a basic fact: not strict. Pack first, then inference, the web, then general knowledge, labelled when it leaves the pack. The chat lane has web tools and may write only to `sources/`.
+- [x] Scopes: topic, chapter (falls back to earlier chapters), course (routes via `index.md`)
+- [x] Verify with both CLIs and the replay adapter (real server runs on a spare port with Claude Code and OpenCode; replay tests; e2e)
+- [x] Sending a new message stops a reply in progress and keeps its text, marked stopped; Stop button in the composer
+- [x] `[studyo:suggest-quiz]` offer, "Make a quiz" button; tables render in chat
+- [ ] Read real answers for a few days; revise the skill from them
 
 ### 9. Courses (brief: `docs/courses-brief.md`)
 Built Oct 3, 2026 in one pass, tested in replay only. Real CLI runs are the open item.

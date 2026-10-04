@@ -58,3 +58,5 @@ Companion to `Learning Library product brief.md` (Oct 2, 2026). Updated as we go
 - Shareable PDF export generated from the HTML pack/condensed doc.
 - Android Auto (build step 8; verify sideload visibility first).
 - Native iPhone app / CarPlay.
+- Chat: pick the model per chat from the chat screen (today it uses the CLI default).
+- Chat: thumbs up / down on each reply, kept with the question so the worst answers feed an AI-judged improvement loop for the `answer` skill.

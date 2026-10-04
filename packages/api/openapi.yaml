@@ -1770,9 +1770,13 @@ components:
         text: { type: string, description: Markdown with reference-style citations }
         status:
           type: string
-          enum: [pending, streaming, complete, failed]
+          enum: [pending, streaming, complete, failed, stopped]
+          description: stopped means the learner cancelled the reply (or sent a new message); the text so far is kept
         job_id: { type: [string, 'null'] }
         suggest_enrich: { type: [string, 'null'] }
+        suggest_quiz:
+          type: [string, 'null']
+          description: A focus the reply offered to quiz the learner on
         error: { type: [string, 'null'] }
         created: { type: string, format: date-time }
 

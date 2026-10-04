@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, ScrollView, Text, View } from 'react-native';
 import { fonts, radius, space, useTheme } from '@/theme';
 import { MathText } from './MathText';
 import { Icon } from './ui';
@@ -12,7 +12,7 @@ const INLINE =
 const body = { fontFamily: fonts.ui, fontSize: 15.5, lineHeight: 24 } as const;
 
 /**
- * Small Markdown for chat replies: paragraphs, lists, headings, code, bold and italic, links, maths,
+ * Small Markdown for chat replies: paragraphs, lists, tables, headings, code, bold and italic, links, maths,
  * reference citations ([S3] with `[S3]: url` definitions), pack anchors `(pack: #section)`, and quoted
  * passages (`> "…" [S4]`) shown as citation cards.
  */
@@ -173,6 +173,50 @@ export function Markdown({
           );
         }
         const lines = block.split('\n');
+        const table = parseTable(lines);
+        if (table) {
+          return (
+            <ScrollView key={key} horizontal showsHorizontalScrollIndicator>
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.rule,
+                  borderRadius: radius.base,
+                  overflow: 'hidden',
+                }}
+              >
+                {[table.head, ...table.rows].map((row, ri) => (
+                  <View
+                    key={`${key}-r${ri}`}
+                    style={{
+                      flexDirection: 'row',
+                      backgroundColor: ri === 0 ? c.surface : undefined,
+                      borderTopWidth: ri === 0 ? 0 : 1,
+                      borderTopColor: c.rule,
+                    }}
+                  >
+                    {table.head.map((_, ci) => (
+                      <View
+                        key={`${key}-r${ri}c${ci}`}
+                        style={{ width: ci === 0 ? 150 : 190, padding: space.sm }}
+                      >
+                        <Text
+                          style={[
+                            body,
+                            { fontSize: 14, lineHeight: 21, color: c.ink },
+                            ri === 0 ? { fontFamily: fonts.uiSemibold } : null,
+                          ]}
+                        >
+                          {inline(row[ci] ?? '', `${key}-r${ri}c${ci}`)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          );
+        }
         if (lines.every((l) => l.startsWith('>'))) {
           return (
             <QuoteCard
@@ -223,6 +267,25 @@ export function Markdown({
       })}
     </View>
   );
+}
+
+/** Split one table row on pipes that are not escaped (`\\|`). */
+function cells(line: string): string[] {
+  const parts = line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/);
+  return parts.map((p) => p.trim().replace(/\\\|/g, '|'));
+}
+
+/** A GFM table: a header row, a `---|---` row, then body rows. Null when the block is not one. */
+function parseTable(lines: string[]): { head: string[]; rows: string[][] } | null {
+  const [first, second, ...rest] = lines;
+  if (!first || !second || !first.includes('|')) return null;
+  if (!/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(second)) return null;
+  const head = cells(first);
+  return { head, rows: rest.filter((l) => l.includes('|')).map(cells) };
 }
 
 /** A quoted passage with where it comes from: `"…" [S4, §3]` becomes a card headed by the source. */

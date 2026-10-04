@@ -1195,10 +1195,15 @@ export interface components {
             role: "user" | "assistant";
             /** @description Markdown with reference-style citations */
             text: string;
-            /** @enum {string} */
-            status: "pending" | "streaming" | "complete" | "failed";
+            /**
+             * @description stopped means the learner cancelled the reply (or sent a new message); the text so far is kept
+             * @enum {string}
+             */
+            status: "pending" | "streaming" | "complete" | "failed" | "stopped";
             job_id?: string | null;
             suggest_enrich?: string | null;
+            /** @description A focus the reply offered to quiz the learner on */
+            suggest_quiz?: string | null;
             error?: string | null;
             /** Format: date-time */
             created: string;

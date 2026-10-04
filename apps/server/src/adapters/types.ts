@@ -1,7 +1,10 @@
 import type { CliId } from '@studyo/api';
 
-/** What a run may do. `work` builds packs; `read-only` answers questions. */
-export type ToolPolicy = 'work' | 'read-only';
+/**
+ * What a run may do. `work` builds packs; `read-only` grades; `chat` answers questions: it reads, uses the web,
+ * and may write only inside `writeScope` (the topic's sources folder).
+ */
+export type ToolPolicy = 'work' | 'read-only' | 'chat';
 
 export interface RunRequest {
   /** Working directory: the library root, so the CLI finds `.claude/skills`. */
@@ -15,6 +18,8 @@ export interface RunRequest {
   fork?: boolean;
   model?: string | null;
   policy: ToolPolicy;
+  /** With `chat`: the one absolute folder the run may write into. */
+  writeScope?: string;
   /** Stream text as it is generated (chat). */
   streamText?: boolean;
   signal: AbortSignal;

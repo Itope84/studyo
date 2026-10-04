@@ -36,21 +36,30 @@ export function opencodeAdapter(bin = process.env.STUDYO_OPENCODE_BIN ?? 'openco
     detect: () => cliVersion(bin),
     async run(req: RunRequest, onEvent: (e: AdapterEvent) => void) {
       const permission =
-        req.policy === 'work'
+        req.policy === 'chat'
           ? {
-              edit: 'allow',
-              bash: 'allow',
+              // Patterns match the path from the filesystem or repo root, so lead with `**`.
+              edit: req.writeScope ? { '*': 'deny', [`**${req.writeScope}/**`]: 'allow' } : 'deny',
+              bash: 'deny',
               webfetch: 'allow',
               websearch: 'allow',
               external_directory: 'deny',
             }
-          : {
-              edit: 'deny',
-              bash: 'deny',
-              webfetch: 'deny',
-              websearch: 'deny',
-              external_directory: 'deny',
-            };
+          : req.policy === 'work'
+            ? {
+                edit: 'allow',
+                bash: 'allow',
+                webfetch: 'allow',
+                websearch: 'allow',
+                external_directory: 'deny',
+              }
+            : {
+                edit: 'deny',
+                bash: 'deny',
+                webfetch: 'deny',
+                websearch: 'deny',
+                external_directory: 'deny',
+              };
       const mcp = Object.fromEntries(
         mcpServerNames(req.cwd).map((name) => [name, { enabled: false }]),
       );

@@ -4,7 +4,8 @@ The rule behind every Studyo skill: **facts come from sources, never from your o
 
 The rule is about facts, not wording. Two kinds of skill apply it differently:
 
-- **Assembling** (`enrich-document`, `enrich-topic`, `enrich-deep`, `answer`): you are reporting what sources say. Stay close to their words, and quote where exact wording matters.
+- **Tutoring** (`answer`): explain from the learner's material first, then inference, the web and general knowledge, labelled when it leaves the pack. See `answer/SKILL.md`. The rule here does not bind it.
+- **Assembling** (`enrich-document`, `enrich-topic`, `enrich-deep`): you are reporting what sources say. Stay close to their words, and quote where exact wording matters.
 - **Teaching** (`condense`): you are explaining the pack's facts so a person understands them. The wording, order, examples and explanation are yours. The facts are not. Teaching writes no citations at all. See `condense/SKILL.md`.
 
 ## What counts as a fact

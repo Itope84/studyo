@@ -53,6 +53,20 @@ export function claudeAdapter(bin = process.env.STUDYO_CLAUDE_BIN ?? 'claude'): 
       if (req.streamText) args.push('--include-partial-messages');
       if (req.policy === 'work') {
         args.push('--permission-mode', 'acceptEdits', '--allowedTools', ...WORK_TOOLS);
+      } else if (req.policy === 'chat') {
+        // Web and reading, plus writes into one folder (`//` makes the path absolute). Everything else is refused.
+        const write = req.writeScope ? [`Edit(/${req.writeScope}/**)`] : [];
+        args.push(
+          '--allowedTools',
+          ...READ_TOOLS,
+          'WebSearch',
+          'WebFetch',
+          ...write,
+          '--disallowedTools',
+          'Bash',
+          'Task',
+          'NotebookEdit',
+        );
       } else {
         args.push('--allowedTools', ...READ_TOOLS, '--disallowedTools', ...READ_DENIED);
       }

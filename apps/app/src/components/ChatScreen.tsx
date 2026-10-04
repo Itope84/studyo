@@ -36,8 +36,8 @@ import { keys, queryClient, upsertChatMessage } from '@/lib/query';
 import { DOCK_HEIGHT, fonts, MAX_WIDTH, radius, space, useTheme } from '@/theme';
 
 /**
- * Ask inside a topic, a chapter or a whole course (`id` is then the course scope id). Answers come only from
- * the pack and its sources, with links.
+ * Ask inside a topic, a chapter or a whole course (`id` is then the course scope id). Answers start from the
+ * pack and its sources and go beyond them (the web, general knowledge) when the question needs it.
  */
 export function ChatScreen({ id }: { id: string }) {
   const isCourse = isCourseScope(id);
@@ -79,6 +79,17 @@ export function ChatScreen({ id }: { id: string }) {
       ? (chat.data?.unavailable_reason ?? null)
       : null;
 
+  const lastReply = [...messages].reverse().find((m) => m.role === 'assistant');
+  const stop = async () => {
+    if (!lastReply?.job_id) return;
+    setError(null);
+    try {
+      await api.cancel(lastReply.job_id);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  };
+
   const send = async () => {
     const q = text.trim();
     if (!q) return;
@@ -118,7 +129,7 @@ export function ChatScreen({ id }: { id: string }) {
         >
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.sage }} />
           <T variant="meta" tone="lead" style={{ flex: 1 }} numberOfLines={1}>
-            {isCourse ? 'From this course' : 'From this pack only'} · {sourceList.length} source
+            Starts from {isCourse ? 'this course' : 'this pack'} · {sourceList.length} source
             {sourceList.length === 1 ? '' : 's'}
           </T>
           <Button
@@ -152,7 +163,7 @@ export function ChatScreen({ id }: { id: string }) {
               body={
                 isCourse
                   ? 'Good for questions across chapters. It looks at the course map first, then opens only the chapters it needs.'
-                  : "Answers come from the pack and its saved sources, with links. If the material doesn't cover it, the answer says so."
+                  : 'Ask anything about it. Answers start from the pack and its saved sources, and say so when they go beyond them.'
               }
             />
           ) : null}
@@ -190,7 +201,7 @@ export function ChatScreen({ id }: { id: string }) {
             <Input
               value={text}
               onChangeText={setText}
-              placeholder={blocked ? 'Chat is paused' : 'Ask a question grounded in this pack'}
+              placeholder={blocked ? 'Chat is paused' : 'Ask a question'}
               editable={!blocked}
               multiline
               style={[{ flex: 1, minHeight: 48, maxHeight: 140, paddingTop: 12 }]}
@@ -203,13 +214,17 @@ export function ChatScreen({ id }: { id: string }) {
                 }
               }}
             />
-            <IconButton
-              name="arrow-upward"
-              label="Send"
-              filled
-              onPress={() => void send()}
-              disabled={!!blocked || !text.trim() || sending || answering}
-            />
+            {answering && !text.trim() ? (
+              <IconButton name="stop" label="Stop" filled onPress={() => void stop()} />
+            ) : (
+              <IconButton
+                name="arrow-upward"
+                label="Send"
+                filled
+                onPress={() => void send()}
+                disabled={!!blocked || !text.trim() || sending}
+              />
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -261,6 +276,7 @@ function Message({
 }) {
   const { c } = useTheme();
   const [busy, setBusy] = useState(false);
+  const [quizBusy, setQuizBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const dismissed = usePrefs((s) => s.dismissedOffers.includes(m.id));
   const dismissOffer = usePrefs((s) => s.dismissOffer);
@@ -291,8 +307,8 @@ function Message({
   }
 
   const done = m.status === 'complete';
+  const stopped = m.status === 'stopped';
   const grounded = done && /\[S\d+/.test(m.text);
-  const gap = done && !!m.suggest_enrich;
   return (
     <View style={{ gap: space.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -311,8 +327,8 @@ function Message({
         <T variant="label" style={{ fontFamily: fonts.uiSemibold }}>
           Studyo
         </T>
-        {gap ? (
-          <Badge kind="neutral" label="Source gap" />
+        {stopped ? (
+          <Badge kind="neutral" label="Stopped" />
         ) : grounded ? (
           <Badge kind="ready" label="Grounded" />
         ) : null}
@@ -341,14 +357,19 @@ function Message({
                 ? 'Waiting for its turn'
                 : m.text
                   ? 'Writing'
-                  : 'Looking through the pack'}
+                  : 'Looking into it'}
             </T>
           </View>
         ) : null}
         {m.status === 'failed' ? (
           <Notice tone="danger" icon="error-outline" title="No answer" body={m.error} />
         ) : null}
-        {done && m.text ? (
+        {stopped && !m.text ? (
+          <T variant="meta" tone="lead">
+            Stopped before it wrote anything.
+          </T>
+        ) : null}
+        {(done || stopped) && m.text ? (
           <View
             style={{
               flexDirection: 'row',
@@ -387,7 +408,7 @@ function Message({
               <Icon name="add-to-photos" size={20} tone="primary" />
               <View style={{ flex: 1, gap: 2 }}>
                 <T variant="label" style={{ fontFamily: fonts.uiSemibold }}>
-                  The pack doesn't cover this yet
+                  Add this to the pack?
                 </T>
                 <T variant="meta" tone="lead">
                   Enrich the topic with sources on: {m.suggest_enrich}
@@ -412,6 +433,49 @@ function Message({
                     router.push(`/topic/${topicId}`);
                   } finally {
                     setBusy(false);
+                  }
+                }}
+              />
+              <Button kind="secondary" label="Dismiss" onPress={() => dismissOffer(m.id)} />
+            </View>
+          </View>
+        ) : null}
+        {m.suggest_quiz && !dismissed ? (
+          <View
+            style={{
+              backgroundColor: c.surface,
+              borderRadius: radius.base,
+              padding: space.md,
+              gap: space.sm,
+            }}
+          >
+            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' }}>
+              <Icon name="quiz" size={20} tone="primary" />
+              <View style={{ flex: 1, gap: 2 }}>
+                <T variant="label" style={{ fontFamily: fonts.uiSemibold }}>
+                  Quiz yourself on this?
+                </T>
+                <T variant="meta" tone="lead">
+                  {m.suggest_quiz}
+                </T>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Button
+                label="Make a quiz"
+                icon="quiz"
+                busy={quizBusy}
+                disabled={!online}
+                style={{ flexGrow: 1 }}
+                onPress={async () => {
+                  setQuizBusy(true);
+                  try {
+                    await api.createQuiz(topicId, { count: 8, focus: m.suggest_quiz ?? undefined });
+                    await queryClient.invalidateQueries({ queryKey: keys.quizzes(topicId) });
+                    await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
+                    router.push(`/topic/${topicId}/quizzes`);
+                  } finally {
+                    setQuizBusy(false);
                   }
                 }}
               />

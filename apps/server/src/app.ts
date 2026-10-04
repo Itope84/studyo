@@ -739,6 +739,10 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     if (!text?.trim()) throw badRequest('Type a question.');
     const { available, reason } = await chatAvailability(id);
     if (!available) throw conflict(reason ?? 'Chat is not available right now.');
+    // A new message replaces a reply still in progress: stop it, keeping what it wrote.
+    for (const j of store.list({ active: true, topic_id: id, limit: 20 })) {
+      if (j.kind === 'answer') await runner.cancel(j.id);
+    }
     const turn = chat.addTurn(id, text.trim());
     const job = enqueue(id, 'answer', { message_id: turn.assistant.id, question: text.trim() });
     const assistant =

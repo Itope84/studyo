@@ -2,7 +2,7 @@
 
 Personal learning pipeline. A home server (this Mac) turns a link, PDF or topic name into a source-grounded study pack by running Claude Code or OpenCode with the skills in `skills/`. One app (Expo: web now, Android later) reads, listens, chats, and downloads packs as PDF for NotebookLM.
 
-Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. Courses, quizzes and take-home have their own brief, `docs/courses-brief.md`. Chat (slice 8) still needs a rework. `README.md` covers running, deploying and Cloudflare Access.
+Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. Courses, quizzes and take-home have their own brief, `docs/courses-brief.md`. Chat (slice 8) was reworked Oct 4, 2026: the `answer` skill explains, goes past the pack when needed, and chat has web and a write scope of `sources/` only. `README.md` covers running, deploying and Cloudflare Access.
 
 ## Layout
 

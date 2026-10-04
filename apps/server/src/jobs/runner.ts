@@ -10,6 +10,7 @@ import type { Library } from '../library.ts';
 import { renderTopic } from '../render.ts';
 import { parseJsonObject, type Study } from '../study.ts';
 import { conflict, nowIso } from '../util.ts';
+import { chatContext } from './chat-context.ts';
 import {
   answersPrompt,
   parseAnswer,
@@ -24,7 +25,7 @@ const TIME_LIMIT_MIN: Record<JobKind, number> = {
   enrich: 45,
   'enrich-deep': 90,
   condense: 30,
-  answer: 6,
+  answer: 20,
   'course-outline': 40,
   quiz: 12,
   'quiz-grade': 6,
@@ -49,6 +50,8 @@ type Lane = 'work' | 'chat';
 /** Runs queued jobs, one per lane, through the CLI adapters. All state lives in the store and the library. */
 export class Runner {
   private running = new Map<Lane, { jobId: string; controller: AbortController }>();
+  /** The reply text so far for each running chat job, so a cancel keeps everything written. */
+  private partial = new Map<string, string>();
   private ticking = new Set<Lane>();
   private stopped = false;
 
@@ -122,7 +125,7 @@ export class Runner {
     this.d.store.update(jobId, { status: 'cancelled', finished: nowIso(), activity: 'Cancelled' });
     if (live) live.controller.abort();
     this.clearQuestions(job.topic_id);
-    if (job.kind === 'answer') this.failChatMessage(job, 'Cancelled.');
+    if (job.kind === 'answer') this.stopChatMessage(job);
     await this.settleTopicAfterStop(job, null);
     return this.d.store.get(jobId);
   }
@@ -236,6 +239,10 @@ export class Runner {
             courseOrigin: courseManifest?.origin.type,
             courseGoal: courseManifest?.goal ?? null,
             courseOriginLine: courseManifest ? originLine(courseManifest.origin) : null,
+            context:
+              job.kind === 'answer'
+                ? await chatContext(library, this.d.courses, job.topic_id, topic)
+                : null,
             params: job.params ?? {},
           });
 
@@ -270,6 +277,7 @@ export class Runner {
           store.update(job.id, { activity: e.summary });
           if (chatMessageId && reply) {
             reply = '';
+            this.partial.set(job.id, '');
             const msg = this.d.chat.updateMessage(job.topic_id, chatMessageId, { text: '' });
             if (msg) this.d.bus.emit('chat.message', { topic_id: job.topic_id, message: msg });
           }
@@ -286,6 +294,7 @@ export class Runner {
         case 'text-delta':
           if (chatMessageId) {
             reply += e.text;
+            this.partial.set(job.id, reply);
             this.d.bus.emit('chat.delta', {
               topic_id: job.topic_id,
               message_id: chatMessageId,
@@ -315,6 +324,10 @@ export class Runner {
       controller.abort();
     }, limitMin * 60_000);
 
+    // Chat may save what it finds, and only there.
+    const chatSources = join(topicPath, 'sources');
+    if (job.kind === 'answer') mkdirSync(chatSources, { recursive: true });
+
     const req: RunRequest = {
       cwd: library.root,
       prompt,
@@ -322,7 +335,8 @@ export class Runner {
       resume,
       fork,
       model: settings.models?.[job.cli] ?? null,
-      policy: job.kind === 'answer' || job.kind === 'quiz-grade' ? 'read-only' : 'work',
+      policy: job.kind === 'answer' ? 'chat' : job.kind === 'quiz-grade' ? 'read-only' : 'work',
+      writeScope: job.kind === 'answer' ? chatSources : undefined,
       streamText: job.kind === 'answer',
       signal: controller.signal,
       meta: { kind: job.kind, phase, topicPath, params: { ...job.params, scope: job.topic_id } },
@@ -347,11 +361,13 @@ export class Runner {
         this.failChatMessage(job, resultError ?? 'The reply failed.');
         return this.fail(job, resultError ?? 'The reply failed.', false);
       }
-      const { text, suggest } = parseAnswer(finalText ?? reply);
+      this.partial.delete(job.id);
+      const { text, suggest, quiz } = parseAnswer(finalText ?? reply);
       const msg = this.d.chat.updateMessage(job.topic_id, chatMessageId, {
         text,
         status: 'complete',
         suggest_enrich: suggest,
+        suggest_quiz: quiz,
       });
       if (msg) this.d.bus.emit('chat.message', { topic_id: job.topic_id, message: msg });
       store.update(job.id, {
@@ -557,6 +573,19 @@ export class Runner {
     const a = await study.getAssignment(job.topic_id, aid);
     const s = a.submissions.find((x) => x.id === sid);
     return s?.status === 'reviewed' ? null : 'The review could not be written.';
+  }
+
+  /** The learner stopped a reply: keep what was written, marked as stopped. */
+  private stopChatMessage(job: JobRecord) {
+    const id = String(job.params?.message_id ?? '');
+    if (!id) return;
+    const text = this.partial.get(job.id);
+    const msg = this.d.chat.updateMessage(job.topic_id, id, {
+      status: 'stopped',
+      ...(text != null ? { text } : {}),
+    });
+    this.partial.delete(job.id);
+    if (msg) this.d.bus.emit('chat.message', { topic_id: job.topic_id, message: msg });
   }
 
   private failChatMessage(job: JobRecord, error: string) {
