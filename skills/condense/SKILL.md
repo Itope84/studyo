@@ -6,12 +6,14 @@ description: Teach a person a Studyo topic's material so they understand it. Rea
 # Condense
 
 Read first, in this order:
-`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/render-contract.md`.
+`../_shared/topic-folder.md`, `../_shared/grounding-and-citations.md`, `../_shared/render-contract.md`, `../_shared/teaching-craft.md`.
 
 Runs only when the user asks. Never start on its own.
 
 Parameters beyond the shared ones:
 - `scope`: `all`, or a list of pack section ids to cover.
+- `output_path`: where to write the document, relative to the topic folder. When given, write exactly there and do **not** edit `topic.json`: the app registers, titles and labels the document itself, and a hand edit of that file can corrupt it. Never overwrite another condensed doc. Without `output_path`, use the slug rule below and update `topic.json` as usual.
+- `notes`: what the learner asked to have covered or stressed (free text, optional). It steers focus and emphasis only. Facts still come from the pack alone; if the pack does not cover what the notes ask, say so in the closing note rather than filling it.
 
 Output: `outputs/condensed-<slug>.md` (and `.html` when the renderer exists), assets under `outputs/assets/`, an updated `topic.json`. The slug is the scope plus the date, so earlier condensed docs are kept.
 
@@ -70,7 +72,7 @@ Length follows what the learner needs. For a newcomer it may be much longer than
 - An analogy, when an idea is abstract and a good comparison genuinely helps. Most ideas do not need one. When you use one, say plainly in the text that it is an analogy, make sure it states no fact about the subject that the pack does not, and do not reuse the same analogy twice.
 - A diagram (`mermaid`) for relationships or processes the pack describes.
 - A picture reused from the pack or saved source assets. Never invent images.
-- A predict-then-reveal check, for each central idea: after teaching it, ask the reader a short question they can answer by applying what they just read to a new case (a count, a next step, where something stops, why a figure misleads), then give the answer and the reasoning right after. Build it only from facts and numbers already stated in the text. Aim for one every few parts.
+- A predict-then-reveal check (a `predict` block), for each central idea: after teaching it, ask the reader a short question they can answer by applying what they just read to a new case (a count, a next step, where something stops, why a figure misleads), then give the answer and the reasoning right after. Build it only from facts and numbers already stated in the text. Aim for one every few parts.
 - A table, when comparing things side by side.
 
 **Self-check for sameness before you finish.** Read the headings and first lines of every part together. If several parts open the same way, use the same device, or have the same shape, rewrite them to differ where the ideas allow. If you used an analogy or example in a part, ask whether the part would be clearer without it. If it would, cut it.
@@ -89,7 +91,7 @@ Read it start to finish as someone who knows only what the profile says. Fix wha
 If something the learner needs is missing from the pack, do not fill it. Add a short closing note saying what the material does not cover, and suggest running enrich for it.
 
 ### 7. Finish
-Render if the renderer is available. Update `topic.json` with the new `condensed` resource. Print:
+Render if the renderer is available. Unless `output_path` was given, update `topic.json` with the new `condensed` resource. Print:
 `[studyo] condense: done. <n> sections, <k> items not covered by the pack.`
 
 ## Do not

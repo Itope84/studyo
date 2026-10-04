@@ -9,10 +9,22 @@
       "model": "opencode-go/deepseek-v4-flash"
     },
     "judge": {
+      "cli": "opencode",
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "editor": {
       "cli": "claude",
       "model": "sonnet"
     },
-    "editor": {
+    "generator-deep": {
+      "cli": "opencode",
+      "model": "opencode-go/muse-spark-1.3-contributor"
+    },
+    "judge-deep": {
+      "cli": "opencode",
+      "model": "opencode-go/deepseek-v4.1-flash"
+    },
+    "editor-deep": {
       "cli": "claude",
       "model": "sonnet"
     }
@@ -62,6 +74,34 @@
       "role": "regression",
       "depth": "default",
       "profile": "developer"
+    },
+    {
+      "id": "designing-data-intensive-applications-by-02-data-models-and-query-language",
+      "role": "tune",
+      "depth": "longer",
+      "profile": "developer",
+      "skill": "condense-deep"
+    },
+    {
+      "id": "rust-systems-engineering-project-based-02-ownership-borrowing-slices-bui",
+      "role": "tune",
+      "depth": "longer",
+      "profile": "developer",
+      "skill": "condense-deep"
+    },
+    {
+      "id": "rust-systems-engineering-project-based-03-structs-enums-match-build-chip",
+      "role": "held",
+      "depth": "longer",
+      "profile": "developer",
+      "skill": "condense-deep"
+    },
+    {
+      "id": "navier-stokes-the-navier-stokes-problem-why-it-w",
+      "role": "held",
+      "depth": "longer",
+      "profile": "non-specialist",
+      "skill": "condense-deep"
     }
   ],
   "budget_usd": 30

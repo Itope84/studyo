@@ -1,0 +1,274 @@
+{
+ "topic": "designing-data-intensive-applications-by-02-data-models-and-query-language",
+ "depth": "longer",
+ "profile": "developer",
+ "held_out": false,
+ "frozen": "2026-10-04",
+ "note": "Concepts: the chapter's teaches list split finer. Keys come from the pack only. Longer depth runs every question.",
+ "concepts": [
+  {
+   "id": "M1",
+   "name": "NoSQL's origin and the case for polyglot persistence",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does 'NoSQL' refer to, and what drove its adoption?",
+     "key": "It names no particular technology: it began as a Twitter hashtag for a 2009 meetup on open source, distributed, nonrelational databases, later reread as 'Not Only SQL'. Drivers: scalability beyond what relational handles easily (very large datasets or write throughput), preference for free and open source software, specialised query operations the relational model supports badly, and frustration with relational schema restrictiveness."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A team needs a relational database for orders and a different store for a specialised query pattern. What is that arrangement called, and why does the chapter expect it?",
+     "key": "Polyglot persistence. Different applications have different requirements, so relational databases will probably be used alongside a variety of nonrelational datastores."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "The relational model's dominance lasted 25 to 30 years. What did it originally serve, and what happened to competitors such as object and XML databases?",
+     "key": "It grew from business data processing on 1960s and 70s mainframes (transaction processing such as banking and airline reservations, and batch processing such as invoicing and payroll), then generalised to many uses. Competitors (network and hierarchical, object databases in the late 1980s and early 90s, XML databases in the early 2000s) each got hype but never lasted; XML databases saw only niche adoption."
+    }
+   ]
+  },
+  {
+   "id": "M2",
+   "name": "Object-relational mismatch and the document (tree) model",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the object-relational mismatch (impedance mismatch), and does an ORM remove it?",
+     "key": "An awkward translation layer between objects in application code and tables, rows and columns. ORMs like ActiveRecord and Hibernate reduce boilerplate but can't completely hide the differences."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A LinkedIn-style profile has positions, education and contact info. Describe three ways to store it relationally and what fetching a profile costs in the multi-table version versus a JSON document.",
+     "key": "(1) Separate tables with foreign keys to `users` (the traditional normalised form); (2) structured or JSON/XML datatypes within a row (supported by Oracle, DB2, SQL Server, PostgreSQL; JSON by DB2, MySQL, PostgreSQL); (3) JSON or XML text in a text column that the application interprets (you typically can't query inside it). Multi-table: multiple queries by `user_id` or a messy multi-way join. JSON document: everything in one place, one query."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does the one-to-many profile structure suit a document model, and what is a limitation of nested items?",
+     "key": "One-to-many relationships form a tree that JSON makes explicit, with good locality. Limitation: you can't refer directly to a nested item; you say 'the second item in the list of positions for user 251', like an access path in the hierarchical model. Fine unless documents are deeply nested."
+    }
+   ]
+  },
+  {
+   "id": "M3",
+   "name": "Many-to-one, many-to-many and normalization",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why store `region_id` and `industry_id` rather than text, and what does that have to do with normalization?",
+     "key": "IDs give consistent spelling, no ambiguity, easy updates (the name is stored in one place), localisation and better search (e.g. Seattle is in Washington). An ID has no human meaning so never needs to change. Removing duplicated human-meaningful data is the key idea of normalization; duplicates cost write overhead and risk inconsistency."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What happens when a document database lacks joins and you have many-to-one references? Which résumé features turn a join-free design into many-to-many?",
+     "key": "The join is emulated in application code with multiple queries (work shifts to the application; small, slow-changing lists can be kept in memory). Making organisations and schools entities with their own pages, and recommendations (one user writing about another, showing the author's current photo) need references and joins: many-to-many."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "The chapter says 'data has a tendency of becoming more interconnected'. What does that imply for choosing a document model?",
+     "key": "An initial join-free design can stop fitting as features are added, so how interconnected your data may become matters; for highly interconnected data the document model is awkward, relational acceptable, graph most natural."
+    }
+   ]
+  },
+  {
+   "id": "M4",
+   "name": "History: hierarchical, network (CODASYL) and relational models",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How did IMS's hierarchical model resemble JSON documents, and what was its weakness?",
+     "key": "It represented all data as a tree of records nested within records. Good for one-to-many, but many-to-many was difficult and it had no joins, so developers had to duplicate (denormalize) data or manually resolve references."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "In CODASYL, how did you reach a record and what burden did that put on the programmer? How does the relational model differ?",
+     "key": "Only by following an access path from a root record along pointer-like links, moving a cursor through the database. With multiple parents the application had to track all paths; changing access paths meant rewriting query code. In the relational model data is laid out in the open: any rows can be read by condition or key, and the query optimizer chooses the access path automatically."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why did the general-purpose query optimizer win in the long run, and how do document databases compare with the relational model on many-to-one and many-to-many?",
+     "key": "You build the optimizer once and every application benefits; a new index is used by existing queries without changing them. Document and relational databases are not fundamentally different there: the related item is referenced by identifier (a foreign key or a document reference) and resolved at read time with a join or follow-up queries. Document databases haven't followed CODASYL."
+    }
+   ]
+  },
+  {
+   "id": "M5",
+   "name": "Relational vs document today: schema, locality, convergence",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What are 'schema-on-read' and 'schema-on-write', and why is 'schemaless' misleading?",
+     "key": "Schema-on-read: structure is implicit and interpreted when data is read (document databases). Schema-on-write: explicit, and the database ensures written data conforms (relational). 'Schemaless' misleads because the reading code assumes some structure, an implicit schema the database doesn't enforce."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "You split a `name` field into `first_name` and `last_name`. How does each model handle it, and what is MySQL's caveat?",
+     "key": "Document: start writing new documents with the new fields and handle old ones in application code when reading. Relational: a migration (`ALTER TABLE ... ADD COLUMN`, then an `UPDATE` to fill it); `ALTER TABLE` usually takes milliseconds, but MySQL copies the whole table (minutes or hours of downtime on large tables). `UPDATE` on a large table is slow everywhere (rewrites every row); you can leave NULL and fill at read time."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "When does data locality favour documents, and when does it not? Where else is locality offered?",
+     "key": "It helps when you need large parts of the document at once (one lookup instead of several index lookups and seeks). The whole document is loaded even if you need a small part, and an update usually rewrites it all (only size-preserving changes happen in place), so keep documents small. Spanner interleaves rows nested in a parent table, Oracle has multi-table index cluster tables, and Bigtable column families (Cassandra, HBase) serve a similar purpose."
+    }
+   ]
+  },
+  {
+   "id": "M6",
+   "name": "Declarative versus imperative queries",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the difference between imperative and declarative querying, and why does declarative win?",
+     "key": "Imperative: tell the computer what operations to do in what order. Declarative (SQL, relational algebra): specify the pattern of data you want, not how; the optimizer picks indexes, join methods and order. It's more concise, hides engine details so the database can improve performance without query changes, and parallelises better."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Why can a database safely reorder rows behind the scenes under `SELECT * FROM animals WHERE family = 'Sharks'` but not under a JavaScript loop over the list?",
+     "key": "SQL guarantees no ordering, so reordering doesn't matter; the database can't be sure imperative code isn't relying on order. Less functionality gives the database room for automatic optimization."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does the CSS example show, and what two problems does the imperative DOM version have?",
+     "key": "`li.selected > p { background-color: blue }` declares a pattern (like XPath `li[@class='selected']/p` in XSL). The JavaScript version is long, and (1) if the `selected` class is removed the blue isn't removed until reload, while CSS un-applies automatically; (2) adopting a new API for speed means rewriting code, whereas browser vendors can speed up CSS and XPath without breaking compatibility."
+    }
+   ]
+  },
+  {
+   "id": "M7",
+   "name": "MapReduce querying and the aggregation pipeline",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is MapReduce, and where does it sit between declarative and imperative? What are the restrictions on map and reduce?",
+     "key": "A programming model for bulk processing across many machines, popularised by Google; some NoSQL stores (MongoDB, CouchDB) use a limited form for read-only queries. Neither declarative nor fully imperative: logic is code snippets the framework calls repeatedly. `map` and `reduce` must be pure functions: only their input, no extra database queries, no side effects, so they can run anywhere, in any order, and be rerun on failure."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Two shark observations in December 1995 have `numAnimals` 3 and 4. Trace the MongoDB mapReduce and give the output.",
+     "key": "`map` is called once per document, emitting `(\"1995-12\", 3)` and `(\"1995-12\", 4)`. Pairs are grouped by key, then `reduce(\"1995-12\", [3, 4])` is called and returns 7. The `query: {family: \"Sharks\"}` filter is declarative; the output goes to `monthlySharkReport`."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why did MongoDB 2.2 add the aggregation pipeline, and what is the moral?",
+     "key": "Writing two carefully coordinated JavaScript functions is harder than one query, and a declarative language gives the optimizer more room. The pipeline (`$match`, `$group`) is similar in expressiveness to a subset of SQL with JSON syntax. A NoSQL system may accidentally reinvent SQL in disguise."
+    }
+   ]
+  },
+  {
+   "id": "M8",
+   "name": "Property graphs",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does a vertex and an edge consist of in the property graph model?",
+     "key": "Vertex: unique ID, set of outgoing edges, set of incoming edges, key-value properties. Edge: unique ID, tail vertex, head vertex, a label for the relationship, key-value properties."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "How can a graph be stored in two relational tables, and why are there indexes on both `tail_vertex` and `head_vertex`?",
+     "key": "A `vertices` table (id, JSON properties) and an `edges` table (id, tail, head, label, JSON properties). The indexes let you efficiently find a vertex's outgoing and incoming edges and traverse the graph forward and backward."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Name three things graphs model well that a traditional relational schema finds difficult.",
+     "key": "Any vertex may connect to any other (no schema restricting associations); different labels store several kinds of information in one clean model; varied structures: different regional structures per country (France's départements and régions versus US counties and states), a country within a country, and varying granularity (a city for residence, only a state for birthplace). Graphs also evolve easily as features are added."
+    }
+   ]
+  },
+  {
+   "id": "M9",
+   "name": "Cypher and variable-length traversals (recursive SQL)",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Read `(person) -[:BORN_IN]-> () -[:WITHIN*0..]-> (us:Location {name:'United States'})`. What does it match, and what does `*0..` mean?",
+     "key": "A person with an outgoing BORN_IN edge to some vertex, from which following WITHIN edges zero or more times reaches the Location named United States. `:WITHIN*0..` means 'follow a WITHIN edge zero or more times', like `*` in a regular expression."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "The Cypher emigrant query can be executed two ways. Describe both and say who chooses.",
+     "key": "Scan all people and check each birthplace and residence; or start from the US and Europe vertices (via an index on `name`), follow incoming WITHIN edges to find all their locations, then find people via incoming BORN_IN or LIVES_IN edges. The query optimizer chooses, since the language is declarative."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is the same query harder in SQL, and what feature makes it possible?",
+     "key": "In relational queries you normally know the joins in advance; a graph traversal needs a variable number of edges, so the join count isn't fixed. Since SQL:1999, recursive common table expressions (`WITH RECURSIVE`) allow it; the example is about 29 lines versus 4 in Cypher, which shows data models suit different use cases."
+    }
+   ]
+  },
+  {
+   "id": "M10",
+   "name": "Triple-stores and SPARQL",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a triple, and how does it map onto a property graph?",
+     "key": "(subject, predicate, object), e.g. (Jim, likes, bananas). The subject is a vertex. If the object is a primitive value, predicate and object are a property key and value (`(lucy, age, 33)`); if the object is another vertex, the predicate is an edge label, subject the tail and object the head (`(lucy, marriedTo, alain)`)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "In SPARQL, what do `?person :bornIn / :within* ?location` and `?usa :name \"United States\"` correspond to in Cypher?",
+     "key": "`(person) -[:BORN_IN]-> () -[:WITHIN*0..]-> (location)` and `(usa {name:'United States'})`. Variables start with `?`. Since RDF uses predicates for both properties and edges, the same syntax matches both."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How do the semantic web, RDF and triple-stores relate, and why use URIs for predicates?",
+     "key": "The triple-store model is independent of the semantic web (Datomic is a triple-store with no claim to it). The semantic web idea: sites publish machine-readable data (RDF) so data combines into a web of data; it was overhyped and hasn't been realised, but triples can be a good internal data model. Predicates are often URIs so combining your data with someone else's causes no conflict if they mean something different by `within`; the URL needn't resolve."
+    }
+   ]
+  },
+  {
+   "id": "M11",
+   "name": "Datalog: facts, rules and recursion",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How does Datalog write data, and what is a rule?",
+     "key": "Facts as `predicate(subject, object)`, e.g. `within(usa, namerica)`. A rule `head :- body` defines a new predicate derived from data or other rules; it applies if the system can find a match for every predicate on the right of `:-`, as if the head were added to the database. Uppercase words are variables."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "With facts name(namerica,'North America'), within(usa,namerica), within(idaho,usa), show how `within_recursive` establishes Idaho is in North America.",
+     "key": "Rule 1 on `name(namerica, 'North America')` produces `within_recursive(namerica, 'North America')`. Rule 2 with `within(usa, namerica)` produces `within_recursive(usa, 'North America')`. Rule 2 with `within(idaho, usa)` produces `within_recursive(idaho, 'North America')`."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "When is Datalog better or worse than Cypher or SPARQL, and why does it matter?",
+     "key": "It takes a small step at a time and needs a different way of thinking; less convenient for simple one-off queries, but rules combine and reuse, so it copes better with complex data. It is much older (studied in the 1980s) and is the foundation later query languages build on; Datomic uses it, and Cascalog for Hadoop."
+    }
+   ]
+  }
+ ]
+}

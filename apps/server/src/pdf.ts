@@ -73,6 +73,10 @@ export function ensurePdf(library: Library, topicId: string, resource: Resource)
       await page.goto(url.href, { waitUntil: 'load', timeout: 30_000 });
       await page.waitForSelector('html[data-studyo-ready]', { timeout: 20_000 }).catch(() => {}); // print anyway; a diagram that never finished is better than no PDF
       await page.emulateMedia({ media: 'print' });
+      // Answers print unfolded. Passed as a string because the server's TypeScript has no DOM types.
+      await page.evaluate(
+        "document.querySelectorAll('details').forEach((d) => { d.open = true; })",
+      );
       await page.pdf({
         path: pdf,
         format: 'A4',

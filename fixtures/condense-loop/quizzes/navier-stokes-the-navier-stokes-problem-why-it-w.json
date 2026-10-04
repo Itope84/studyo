@@ -1,0 +1,274 @@
+{
+ "topic": "navier-stokes-the-navier-stokes-problem-why-it-w",
+ "depth": "longer",
+ "profile": "non-specialist",
+ "held_out": true,
+ "frozen": "2026-10-04",
+ "note": "Standalone topic: concepts come from the pack's sections, not a teaches list. Keys come from the pack only. Longer depth runs every question.",
+ "concepts": [
+  {
+   "id": "N1",
+   "name": "What kind of equations: nonlinear, coupled PDEs as Newton's law for fluids",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why are the Navier–Stokes equations partial rather than ordinary differential equations, and what two properties make them hard?",
+     "key": "Four independent variables (three of space plus time); the velocity is a function of all at once. They are nonlinear (the fluid carries itself: the term (u·∇)u) and coupled (every unknown appears in almost every equation, so nothing is solved in isolation)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Name the four terms of the incompressible momentum equation and what each represents.",
+     "key": "Left: acceleration of a fluid particle (local change plus change from being carried along). Right: gravity (external force), the pressure force, and the viscous force. It is Newton's second law for a tiny parcel of fluid. With the continuity equation (div u = 0) these determine the three velocity components and the pressure."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What is the difference between convection and diffusion terms, and which of the two is the Euler equation missing?",
+     "key": "Convection terms (left) transport properties by the ordered motion of the flow; diffusion terms (right) by the random motion of molecules, where viscosity lives. The Euler equations set viscosity to zero, so they lack the viscous (diffusion) term."
+    }
+   ]
+  },
+  {
+   "id": "N2",
+   "name": "Gradient and pressure",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does the gradient of a function point at, geometrically?",
+     "key": "In the direction of most rapid increase of the function, with magnitude equal to the steepest slope; and it is perpendicular to the level set (contour)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What direction and strength of push does the term −∇p give the fluid?",
+     "key": "Downhill: perpendicular to surfaces of constant pressure, from high toward low pressure, with strength equal to how steeply pressure changes."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does (u·∇)u mean in words?",
+     "key": "Differentiate u in the direction the fluid itself is moving: the change you feel by being carried along."
+    }
+   ]
+  },
+  {
+   "id": "N3",
+   "name": "Divergence and incompressibility",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is divergence, geometrically, and what does div u = 0 say?",
+     "key": "Net outflow minus inflow per unit volume as a small box shrinks to a point (flux per unit volume). div u = 0 means what flows into any region must flow out: no sources or sinks, incompressible fluid."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A unit cube has velocity 1.0 entering the left face and 1.2 leaving the right face, with the other faces matching. What is the divergence and what does it signify? What if the numbers are reversed?",
+     "key": "Net outflow 0.2, volume 1, so divergence about 0.2: a source inside. Reversed: negative, a sink. Incompressibility says neither ever happens."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How does the pack justify that div u must be zero everywhere, not just on average?",
+     "key": "If what flows into every closed surface must flow out, the volume integral of div v over any volume is zero, and the only way that holds is for div v to be everywhere zero."
+    }
+   ]
+  },
+  {
+   "id": "N4",
+   "name": "Curl and vorticity",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is curl (paddlewheel picture) and what is vorticity?",
+     "key": "Put a paddlewheel in moving water: at the orientation where it spins fastest, curl points along its axis with magnitude the circulation per area as the loop shrinks. Vorticity is the curl of the velocity field, heuristically the local rotation of a fluid parcel."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "In rigid spin, how does vorticity relate to angular velocity? In a deforming fluid what can happen?",
+     "key": "In rigid spin, vorticity is twice the angular velocity. In a deforming fluid the axes in a plane can rotate at very different rates or directions, even cancelling to zero net vorticity."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does vorticity matter for the blowup question?",
+     "key": "The anchor tracks blowup for Euler through vorticity (the Beale–Kato–Majda integral): if there is finite blowup time, the vorticity blows up rapidly; unbounded spin-up signals the velocity leaving the smooth world."
+    }
+   ]
+  },
+  {
+   "id": "N5",
+   "name": "Laplacian and viscous smoothing",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does the Laplacian measure and what does the viscous term μ∇²u do to a velocity field?",
+     "key": "How far a value at a point deviates from the average of its small neighbourhood (divergence of the gradient; sum of second partial derivatives). The viscous term irons each parcel toward its neighbours' average, like heat evening out temperature (momentum diffusion)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What do positive, negative and zero Laplacian mean at a point?",
+     "key": "Positive: neighbours higher on average, a valley. Negative: a hilltop. Zero: level with the neighbourhood (equilibrium under diffusion)."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "At a solid wall, what condition applies and what does it produce?",
+     "key": "No-slip: the fluid sticks to the wall (u equals the wall's velocity). This forces a steep tangential-velocity gradient, which produces vorticity in the fluid."
+    }
+   ]
+  },
+  {
+   "id": "N6",
+   "name": "Viscosity, Reynolds number, boundary layers and Euler",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is viscosity, and what does the Reynolds number measure?",
+     "key": "Internal friction (honey has more than water). Re = ρUL/μ is the ratio of inertial forces to viscous forces."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What happens at very small Re and at fast flows?",
+     "key": "Small Re (slow, sticky): the nonlinear term drops and you get the Stokes equations (Stokes' drag law, as in a falling-ball viscometer). Fast flows grow boundary layers, thin regions near a surface where viscous effects are significant, as over an aircraft wing."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why can't the Euler equations model boundary layers, and what does 'a trace of viscosity changes everything' mean?",
+     "key": "Boundary layers and turbulence come from the diffusion terms, and Euler has only convection terms. Introducing even an infinitesimal amount of friction makes a fluid behave in a profoundly different way."
+    }
+   ]
+  },
+  {
+   "id": "N7",
+   "name": "History and why the equations matter",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Who introduced what: Euler (1755), Navier (1822), Cauchy/Poisson/Saint-Venant, Stokes (1845)?",
+     "key": "Euler: equations for non-viscous fluids, the start of mathematical fluid motion. Navier: first put friction into the equations (two memoirs read at the French Academy 18 March 1822), by analogy with his equations for elastic solids. Cauchy, Poisson and Saint-Venant re-derived them independently (1823 to 1837). Stokes (1845) derived them from pendulum experiments and confronted theory with experiment, which is why his name stuck."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Name uses of the equations.",
+     "key": "Weather, air and ocean currents, pollution dispersion, water flow in tubes, air over a wing, blood flow through arteries; design of power stations, aircraft, cars, pumps, turbines and ventilators."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What assumption do the equations make about fluids, and why does it matter for the prize question?",
+     "key": "They treat fluid as a perfect continuum you can zoom into endlessly, while real fluids are made of molecules and atoms. That gap between idealised mathematics and reality is where the prize question lives; a singularity would mean the continuum model breaks."
+    }
+   ]
+  },
+  {
+   "id": "N8",
+   "name": "Smooth versus weak solutions",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What are smooth and weak solutions, and how is a weak one defined?",
+     "key": "Smooth: differentiable as many times as you like, everywhere, forever. Weak: integrate the equation against a smooth test function and integrate by parts so derivatives fall on the test function, so the velocity needs less smoothness (square-integrable)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What did Leray show in 1934, and what remains unknown?",
+     "key": "Weak solutions in three dimensions always exist. Whether they are smooth, and whether they are unique, is unknown for Navier–Stokes."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How does uniqueness of weak solutions differ between Navier–Stokes and Euler?",
+     "key": "Unknown for Navier–Stokes; for Euler it is 'strikingly false': Scheffer and Shnirelman exhibited weak solutions where a fluid starts from rest, moves with no outside stimulus, and returns to rest."
+    }
+   ]
+  },
+  {
+   "id": "N9",
+   "name": "Blowup, singularities and partial results",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the blowup time and what does a finite one mean for Navier–Stokes?",
+     "key": "For large initial data, smoothness is guaranteed only on a short interval [0,T) depending on the data; the largest such T is the blowup time. Either solutions stay smooth forever, or some smooth start has a finite blowup time, and for Navier–Stokes the velocity then becomes unbounded near that time."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What is a singularity physically, and what is known in two dimensions, with small data and with Caffarelli–Kohn–Nirenberg?",
+     "key": "A part of the fluid flowing infinitely fast: impossible physically, so the continuum model would break. In 2D everything was settled long ago (Ladyzhenskaya) and gives no hint about 3D. In 3D smoothness holds for small initial velocity or for a short time. CKN (with Lin): the singular set of a weak solution is small in a precise sense and cannot contain a spacetime curve; the best partial regularity theorem, and very hard to go further."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is 2D no guide to 3D?",
+     "key": "The main difficulties are absent in two dimensions."
+    }
+   ]
+  },
+  {
+   "id": "N10",
+   "name": "Forcing and the four formulations (A) to (D)",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is the force term f, and how do (A)/(B) differ from (C)/(D)?",
+     "key": "An externally applied force such as gravity. (A) and (B) say every smooth start with f = 0 stays smooth forever (on R³ or on the periodic space); (C) and (D) say there exist a smooth start and a smooth, decaying force for which no smooth solution exists."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Why does it matter whether the force is allowed, and why did most researchers prefer the unforced case?",
+     "key": "With a force, one can exhibit a contrived force reverse-engineered to break the equations; most groups wanted blowup from the fluid's intrinsic forces alone. Having a force at all makes sense since all known fluids are under some external force, but gravity differs from a contrived one."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What conditions make a solution 'physically reasonable'?",
+     "key": "Smooth p and u, bounded energy (the integral of |u|² stays bounded), and decaying data and force (to avoid growth at infinity); or alternatively spatial periodicity."
+    }
+   ]
+  },
+  {
+   "id": "N11",
+   "name": "The claimed September 2026 solution and the dispute",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does the claimed solution show, and which statements does it claim?",
+     "key": "A smooth fluid at rest with a smooth applied force develops a singularity in finite time with finite energy: a vortex that spirals inward and elongates like spaghetti, its core shrinking and speeding up at constant energy. OpenAI claims it establishes (C) and also (D)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What is the substantive controversy, and what does it change for engineers?",
+     "key": "The proof uses a forced problem that mathematicians call disconnected from reality (a loophole in the framing); the unforced question, which most cared about, remains open, and a follow-up suggests the method can't be extended to it. For engineers nothing breaks: it says the idealised equations can fail, not that water does anything new; aircraft design and weather models carry on."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does Clay say and what must happen before a prize is awarded?",
+     "key": "Clay said the problem has apparently been settled, with an unhurried process and updates to come. A prize requires publication in a qualifying refereed outlet, at least two years of scrutiny and general acceptance, at Clay's discretion; none has been awarded."
+    }
+   ]
+  }
+ ]
+}

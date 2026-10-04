@@ -1,0 +1,226 @@
+{
+ "topic": "rust-systems-engineering-project-based-03-structs-enums-match-build-chip",
+ "depth": "longer",
+ "profile": "developer",
+ "held_out": true,
+ "frozen": "2026-10-04",
+ "note": "Concepts: the chapter's teaches list split finer. Keys come from the pack only. Longer depth runs every question.",
+ "concepts": [
+  {
+   "id": "S1",
+   "name": "Structs: define, instantiate, update",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How is a struct different from a tuple, and how is a struct instance created and changed?",
+     "key": "A struct names each field, so you don't rely on order or `.0`/`.1`; each piece can have a different type. Create an instance with `Name { field: value }` in any order; read with dot notation; to change a field the whole instance must be `mut` (individual fields cannot be marked mutable)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "`let user2 = User { email: String::from(\"x\"), ..user1 };` Can `user1` still be used? What if `user2` also gave a new `username`?",
+     "key": "No: the `String` in `username` was moved into `user2` (update syntax moves data). If both `email` and `username` are new, only `active` and `sign_in_count` (`Copy` types) come from `user1`, so `user1` stays valid. `..user1` must come last."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Compare a plain struct, a tuple struct and a unit-like struct. Why does a function taking `Color` reject a `Point` with the same field types?",
+     "key": "Plain: named fields. Tuple struct: a name but only field types. Unit-like: no fields, behaves like `()`. Each struct defined is its own type, so `Color(i32,i32,i32)` and `Point(i32,i32,i32)` are different types."
+    }
+   ]
+  },
+  {
+   "id": "S2",
+   "name": "Why a struct: the Rectangle refactor and derived Debug",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does refactoring Rectangle from two variables to a tuple to a struct buy at each step?",
+     "key": "Tuple: one argument but elements unnamed (index `.0`/`.1`), easy to mix up width and height. Struct: labelled data, so `area` says what it computes from `width` and `height`; pass `&Rectangle` so `main` keeps ownership."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "`println!(\"{rect1}\")` fails and `println!(\"{rect1:?}\")` fails. What fixes the second, and what does it print for width 30, height 50?",
+     "key": "`{}` needs `Display`, which Rust doesn't guess for structs. `{:?}` needs `Debug`: add `#[derive(Debug)]` before the struct. It prints `rect1 is Rectangle { width: 30, height: 50 }`. `{:#?}` pretty-prints across lines."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How does `dbg!` differ from `println!`?",
+     "key": "`dbg!` takes ownership of an expression (println takes a reference), prints file and line plus the value to stderr (println: stdout), and returns ownership."
+    }
+   ]
+  },
+  {
+   "id": "S3",
+   "name": "Methods and associated functions",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What makes a function in an `impl` block a method, and what do `&self`, `&mut self` and `self` signal?",
+     "key": "A method's first parameter is `self` (the instance); `&self` reads, `&mut self` mutates, bare `self` takes ownership (rare, to transform it and prevent reuse). `&self` is short for `self: &Self`."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Write the signature of a constructor that makes a square `Rectangle` and show how it's called. Why is there no `->` operator in Rust?",
+     "key": "`fn square(size: u32) -> Self { Self { width: size, height: size } }` is an associated function (no `self`), called `Rectangle::square(3)`. Rust uses automatic referencing and dereferencing: `p1.distance(&p2)` equals `(&p1).distance(&p2)`, since the method's receiver type tells Rust whether to borrow, mutably borrow or consume."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Are all associated functions methods? Can a struct have several `impl` blocks?",
+     "key": "No: all functions in an `impl` are associated functions, but only those taking `self` are methods (e.g. `String::from` isn't). A struct may have multiple `impl` blocks; equivalent to one here, useful with generics and traits."
+    }
+   ]
+  },
+  {
+   "id": "S4",
+   "name": "Enums and variants carrying data",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "When does an enum fit better than a struct, and what can a variant hold?",
+     "key": "An enum says a value is exactly one of a set of variants (an IP address is v4 or v6, never both). Variants can hold no data, named fields, a single value or several values of different types, and each variant name acts as a constructor function."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Given `enum Message { Quit, Move { x: i32, y: i32 }, Write(String), ChangeColor(i32, i32, i32) }`, what does each variant carry, and what do you gain over four separate structs?",
+     "key": "Quit: nothing. Move: named fields x, y. Write: one `String`. ChangeColor: three `i32`. They form one type, so one function can take any message, and `impl Message` can add methods."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why store IP address data inside the enum variants instead of a struct holding `kind` and `address`?",
+     "key": "It's more concise, and each variant can hold different types and amounts (e.g. `V4(u8,u8,u8,u8)` and `V6(String)`), which a single struct cannot."
+    }
+   ]
+  },
+  {
+   "id": "S5",
+   "name": "Option<T> instead of null",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is `Option<T>`, and why does Rust have it instead of null?",
+     "key": "`enum Option<T> { None, Some(T) }`, for a value that may be present or absent. Rust has no null; null's ease of misuse caused innumerable errors. `Option` and its variants are in the prelude."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Why does `let x: i8 = 5; let y: Option<i8> = Some(5); let sum = x + y;` fail, and why does `let absent: Option<i32> = None;` need an annotation?",
+     "key": "`Option<i8>` is a different type from `i8` (error E0277: no `i8 + Option<i8>`). Where a `T` is expected, a valid value is guaranteed. `None` alone gives no `T`, so the compiler can't infer the type."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does `Some(5)` have in common with `Some('e')`, and what differs?",
+     "key": "Both are `Option` values built with `Some`; the types are `Option<i32>` and `Option<char>` (inferred), different concrete types because `T` differs."
+    }
+   ]
+  },
+  {
+   "id": "S6",
+   "name": "match: arms, binding, exhaustiveness, catch-alls",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How does `match` choose an arm, and what does the compiler enforce?",
+     "key": "It compares the value against patterns in order and runs the first that fits (the coin-sorting machine). Each arm is pattern `=>` expression, and the arm's value is the match's value. The compiler checks all cases are handled."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "`plus_one` matches `None => None, Some(i) => Some(i + 1)`. What do `plus_one(Some(5))` and `plus_one(None)` return? What error do you get if you delete the `None` arm?",
+     "key": "`Some(6)` (binds `i = 5`) and `None`. Error E0004: non-exhaustive patterns, `None` not covered. Exhaustiveness is what makes the billion-dollar mistake impossible."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Compare `other => move_player(other)`, `_ => reroll()` and `_ => ()` as final arms.",
+     "key": "`other` catches all remaining values and binds them for use. `_` matches without binding (no unused-variable warning). `_ => ()` does nothing. The catch-all must be last; later arms are unreachable."
+    }
+   ]
+  },
+  {
+   "id": "S7",
+   "name": "if let and let...else",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is `if let`, and what do you give up using it instead of `match`?",
+     "key": "Sugar for a `match` with one interesting arm: `if let Some(max) = config_max { ... }`; the body runs only on a match and `max` binds inside. You lose the compiler's exhaustiveness checking."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Rewrite a `match` that handles `Quarter(state)` and counts everything else with `count += 1` using `if let`. Then say how `let ... else` helps `describe_state_quarter`.",
+     "key": "`if let Coin::Quarter(state) = coin { println!(\"State quarter from {state:?}!\"); } else { count += 1; }` (the `else` is the `_` arm). `let Coin::Quarter(state) = coin else { return None; };` binds `state` in the outer scope and the `else` must diverge, keeping the happy path in the main body rather than nested inside an `if let`."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "When should you pick `match`, `if let` or `let...else`?",
+     "key": "`match` when you want exhaustiveness (several cases); `if let` when conciseness justifies losing it; `let...else` to stay on the happy path when a mismatch should return, break or panic."
+    }
+   ]
+  },
+  {
+   "id": "S8",
+   "name": "CHIP-8 machine state as a struct",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What state does the CHIP-8 `Cpu` struct hold, and why can memory be a fixed array field?",
+     "key": "4096 bytes of RAM (0x000 to 0xFFF), sixteen 8-bit `V` registers, 16-bit `I`, a program counter, a stack of 16 16-bit values, an 8-bit stack pointer and two timers. The size is fixed, so memory fits in one struct field without growing at runtime."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Where does `pc` start, and why is the `Cpu` instance declared `mut`?",
+     "key": "At `0x200` (512), where most programs load (some use `0x600`). Executing instructions mutates it, and the whole instance must be mutable. The first 512 bytes are reserved for the interpreter."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What rule applies to register VF?",
+     "key": "Programs should not use it: some instructions use it as a flag (e.g. carry in add)."
+    }
+   ]
+  },
+  {
+   "id": "S9",
+   "name": "CHIP-8 fetch, decode and execute with an enum and match",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How does the CPU fetch an instruction, and how does decoding map onto Rust features?",
+     "key": "Instructions are 2 bytes, most-significant byte first: read two bytes at PC and join them big-endian. Opcodes split into nibble fields (12-bit address, 4-bit register selectors, 8-bit constant). Each opcode family is an `Opcode` enum variant carrying its fields, and one `match` in `step` decodes and executes."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What do `1nnn`, `6xkk` and `8xy4` do, and which of them sets PC itself rather than advancing it by 2 in the sketch?",
+     "key": "`1nnn` sets PC to nnn (the jump; it sets PC itself). `6xkk` puts kk into Vx. `8xy4` adds Vy to Vx, keeping the lowest 8 bits, and sets VF to 1 if the result is above 255, otherwise 0."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why `fn step(&mut self)`, and how is `cpu.step()` allowed without pointer syntax?",
+     "key": "The method mutates the CPU, so it takes `&mut self`. Automatic referencing and dereferencing adds the `&mut` for the receiver; Rust has no `->`."
+    }
+   ]
+  }
+ ]
+}

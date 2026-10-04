@@ -1,0 +1,202 @@
+{
+ "topic": "rust-systems-engineering-project-based-02-ownership-borrowing-slices-bui",
+ "depth": "longer",
+ "profile": "developer",
+ "held_out": false,
+ "frozen": "2026-10-04",
+ "note": "Concepts: the chapter's teaches list split finer, plus the Log CLI build. Keys come from the pack only. Longer depth runs every question.",
+ "concepts": [
+  {
+   "id": "R1",
+   "name": "Ownership rules, scope and drop",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "State the three ownership rules, and say when memory for a `String` is returned.",
+     "key": "Each value has an owner; there can be only one owner at a time; when the owner goes out of scope the value is dropped. Rust calls `drop` automatically at the closing curly bracket, which returns the memory."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "In `let mut s = String::from(\"hello\"); s = String::from(\"ahoy\"); println!(\"{s}, world!\");`, what is printed and when is the \"hello\" memory freed?",
+     "key": "`ahoy, world!`. Assigning a new value to an existing variable calls `drop` on the original value immediately, so \"hello\" is freed at the assignment, not at the end of scope."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Rust, a garbage-collected language and a manual-free language all manage heap memory. How does Rust's approach differ from each?",
+     "key": "A GC finds unused memory while the program runs. Manual languages make the programmer pair one allocate with one free (forget: waste; too early: invalid variable; twice: bug). Rust uses ownership rules the compiler checks; nothing slows the running program, and a rule violation means the program won't compile."
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "name": "Moves, clone and Copy",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What happens in memory on `let s2 = s1;` when `s1` is a `String`, and why is `s1` then invalid?",
+     "key": "The pointer, length and capacity on the stack are copied; the heap data is not. Both would point at the same heap memory and free it twice (a double free), so Rust treats `s1` as moved and no longer valid. Only `s2` frees the memory."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Which of these compile if `x` is used after being assigned to `y`: `let x = 5; let y = x;` versus `let a = String::from(\"hi\"); let b = a;`? What would you change in the second to keep using `a`?",
+     "key": "The integer one compiles: integers have a known size, live on the stack, and implement `Copy`, so `x` is copied, not moved. The `String` one fails (`borrow of moved value`). Use `a.clone()` to deep-copy the heap data."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Does `(i32, i32)` implement `Copy`? Does `(i32, String)`? Why, and why can't a type that implements `Drop` be `Copy`?",
+     "key": "`(i32, i32)` does, `(i32, String)` does not: tuples are `Copy` only if all their parts are. Anything needing allocation or special cleanup on scope exit cannot be `Copy`; annotating a type whose parts implement `Drop` is a compile-time error."
+    }
+   ]
+  },
+  {
+   "id": "R3",
+   "name": "Ownership through functions",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What happens to ownership when a `String` is passed to a function, and when a function returns one?",
+     "key": "Passing moves it into the function (the caller can no longer use it); if the function doesn't return it, it is dropped when the function ends. Returning a value moves ownership out to the caller."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "`takes_ownership(s)` is called with a `String` `s`, then `makes_copy(x)` with an `i32` `x`. Which of `s` and `x` can `main` use afterwards, and which `drop` runs at the end of `main`?",
+     "key": "`x` can be used (`i32` is `Copy`); `s` cannot (moved). At the end of `main`, nothing special happens for `s` because it was moved; the `String` was dropped when `takes_ownership` ended."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "The tuple-returning `calculate_length(s: String) -> (String, usize)` works. Why does the chapter still call it too much ceremony, and what does it use instead?",
+     "key": "Anything passed in must be handed back if the caller wants it again, alongside the real result. A reference (`&String`) lets a function use a value without taking ownership."
+    }
+   ]
+  },
+  {
+   "id": "R4",
+   "name": "References, borrowing and the borrowing rules",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a reference and what does 'borrowing' mean? What are the two rules of references?",
+     "key": "A reference is an address you can follow to data owned by another variable; creating one is borrowing, and it does not own the data, so the value isn't dropped when the reference stops being used. Rules: at any time either one mutable reference or any number of immutable references; references must always be valid."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Given `let mut s = String::from(\"hello\");`: `let r1 = &s; let r2 = &s; println!(\"{r1} and {r2}\"); let r3 = &mut s; println!(\"{r3}\");` compiles. What breaks if you add `r1` to the last `println!`?",
+     "key": "It no longer compiles: `r1`'s scope runs through its last use, so it would overlap with the mutable borrow `r3` (error E0502). As written, the immutable references' last use comes before `r3` is created, so the scopes don't overlap."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does Rust allow many immutable references but only one mutable one? Name the three conditions that make a data race.",
+     "key": "Readers can't affect each other, but a writer changes data under readers or other writers. A data race: two or more pointers access the same data at the same time, at least one writes, and nothing synchronises access. Rust prevents it at compile time."
+    }
+   ]
+  },
+  {
+   "id": "R5",
+   "name": "Dangling references",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a dangling reference, and what guarantee does Rust give?",
+     "key": "A pointer to memory that may have been given to someone else after the data was freed. The compiler ensures data does not go out of scope before references to it do."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Why does `fn dangle() -> &String { let s = String::from(\"hello\"); &s }` fail, and what is the fix?",
+     "key": "`s` is dropped when `dangle` ends, so the returned reference would point to an invalid `String` (error: missing lifetime specifier; no value for it to be borrowed from). Return the `String` itself so ownership moves out."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "The `dangle` error talks about 'lifetimes', which the chapter hasn't covered. What does the chapter tell you to take from it?",
+     "key": "Ignore the lifetime parts: the key message is that the return type contains a borrowed value but there is no value for it to be borrowed from."
+    }
+   ]
+  },
+  {
+   "id": "R6",
+   "name": "Slices and `&str`",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a string slice, what does it store, and why is it not an owner?",
+     "key": "A reference to a contiguous part of a `String`, e.g. `&s[0..5]`; it stores the starting position (pointer) and a length, end minus start. It is a kind of reference, so it has no ownership."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "For `s = String::from(\"hello world\")`, what are `&s[..5]`, `&s[6..]` and the pointer and length of `world`? What is the type of the literal `\"Hello, world!\"`?",
+     "key": "`hello`, `world`; `world` points at the byte at index 6 with length 5. The literal's type is `&str`, a slice pointing into the binary, which is why literals are immutable."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is `first_word(s: &str) -> &str` better than `first_word(s: &String) -> &str`, and why does returning a slice beat returning a `usize` index?",
+     "key": "`&str` accepts `&String`, slices of a `String`, string literals and slices of literals, with no loss of function. A returned index is detached from the string: after `s.clear()` it is silently invalid, while a slice ties the result to the string so the mistake is caught at compile time."
+    }
+   ]
+  },
+  {
+   "id": "R7",
+   "name": "Borrow checker errors, read as bugs caught early",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why does the slice version of `first_word` followed by `s.clear()` and then using `word` fail to compile? Name the error kind.",
+     "key": "`word` holds an immutable borrow of `s` that is still used later; `clear` needs a mutable reference, and mutable plus immutable can't coexist (E0502, cannot borrow as mutable because it is also borrowed as immutable)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Match each error to its cause: E0382, E0499, E0596, E0502.",
+     "key": "E0382: borrow of a moved value. E0499: two mutable borrows at once. E0596: mutating through a `&` (immutable) reference; fix with `&mut`. E0502: a mutable borrow while an immutable one is still in use."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "The chapter says the frustrating borrow errors are a benefit. What is the argument?",
+     "key": "The compiler points out a potential bug at compile time and shows exactly where, so you don't have to track down at runtime why your data isn't what you thought it was."
+    }
+   ]
+  },
+  {
+   "id": "R8",
+   "name": "Zero-copy filtering (Log CLI build)",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "How does the `search` function avoid copying lines, and what does the `'a` in its signature record?",
+     "key": "It keeps the one `contents` string alive and pushes `&str` slices (from `lines()`, tested with `contains`) into a `Vec`. `'a` records that the returned slices live as long as the `contents` argument (not `query`)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What must stay true while you use the `Vec<&str>` that `search` returns?",
+     "key": "The `contents` string must stay alive: the data referenced by a slice needs to be valid for the reference to be valid."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is `results.push(line)` cheap here, versus building a `Vec<String>`?",
+     "key": "Each `line` is a slice borrowing the file contents (a pointer and length), so nothing on the heap is copied; a `String` per line would need new allocations and copies."
+    }
+   ]
+  }
+ ]
+}

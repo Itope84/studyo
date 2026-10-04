@@ -24,6 +24,17 @@ describe('render', () => {
     expect(readFileSync(condensed.htmlPath, 'utf8')).toContain('class="mermaid"');
   });
 
+  it('renders a predict block with the answer folded away', () => {
+    const { html } = render(
+      '```predict\nWhat does `x` print?\n---reveal---\nIt prints **5**.\n```',
+      opts,
+    );
+    expect(html).toContain('class="predict"');
+    expect(html).toMatch(/<details class="reveal"><summary[^>]*>Reveal<\/summary>/);
+    expect(html).toMatch(/What does <code>x<\/code> print\?/);
+    expect(() => render('```predict\nno answer here\n```', opts)).toThrow(/---reveal---/);
+  });
+
   it('fails loudly on unknown directives and callout kinds', () => {
     expect(() => render('```carousel items=3\nx\n```', opts)).toThrow(RenderError);
     expect(() => render('```callout kind=shout\nx\n```', opts)).toThrow(/Unknown callout kind/);

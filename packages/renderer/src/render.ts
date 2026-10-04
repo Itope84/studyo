@@ -17,7 +17,7 @@ import { parse as parseYaml } from 'yaml';
 import { frameCss } from './styles.ts';
 import { sanitizeSvg } from './svg.ts';
 
-export const RENDERER_VERSION = '1.1.0';
+export const RENDERER_VERSION = '1.2.0';
 
 export interface Heading {
   id: string;
@@ -62,7 +62,9 @@ const CALLOUT_KINDS: Record<string, string> = {
   analogy: 'Analogy',
   note: 'Note',
 };
-const DIRECTIVES = new Set(['callout', 'mermaid', 'svg', 'html', 'details']);
+const DIRECTIVES = new Set(['callout', 'mermaid', 'svg', 'html', 'details', 'predict']);
+/** Separates the question from the answer inside a `predict` block. */
+const REVEAL_SPLIT = /^---reveal---\s*$/m;
 
 const ORIGINAL_START = /^<!--\s*studyo:original:start\s*([^\s]*)\s*-->$/;
 const ORIGINAL_END = /^<!--\s*studyo:original:end\s*-->$/;
@@ -265,6 +267,27 @@ export function renderBody(markdown: string): RenderedBody {
           [],
           [textBlock('summary', [], meta.summary ?? 'More'), ...parseFragment(node.value)],
         );
+      case 'predict': {
+        const [question = '', ...rest] = node.value.split(REVEAL_SPLIT);
+        const answer = rest.join('\n').trim();
+        if (!answer)
+          throw new RenderError(
+            `A predict block needs a line "---reveal---" before the answer (line ${node.position?.start.line})`,
+          );
+        return el(
+          'aside',
+          ['predict'],
+          [
+            textBlock('span', ['predict-label'], meta.title ?? 'Predict'),
+            ...parseFragment(question.trim()),
+            el(
+              'details',
+              ['reveal'],
+              [textBlock('summary', [], 'Reveal'), ...parseFragment(answer)],
+            ),
+          ],
+        );
+      }
       case 'mermaid':
         usesMermaid = true;
         return el('div', ['diagram'], [textBlock('pre', ['mermaid'], node.value)]);

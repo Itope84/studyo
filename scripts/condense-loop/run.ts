@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { agyAdapter } from '../../apps/server/src/adapters/agy.ts';
 import { claudeAdapter } from '../../apps/server/src/adapters/claude.ts';
 import { opencodeAdapter } from '../../apps/server/src/adapters/opencode.ts';
 import type { CliAdapter, RunRequest } from '../../apps/server/src/adapters/types.ts';
@@ -31,7 +32,14 @@ const CFG = JSON.parse(readFileSync(join(ROOT, 'scripts/condense-loop/config.jso
 const FIX = join(ROOT, 'fixtures/condense-loop');
 const LIB = join(ROOT, 'library');
 
-type Role = 'generator' | 'reader' | 'judge' | 'editor';
+type Role =
+  | 'generator'
+  | 'reader'
+  | 'judge'
+  | 'editor'
+  | 'generator-deep'
+  | 'judge-deep'
+  | 'editor-deep';
 interface Question {
   level: string;
   default: boolean;
@@ -47,6 +55,8 @@ interface TopicCfg {
   role: string;
   depth: 'default' | 'longer';
   profile: string;
+  /** Override the skill name. Default is `condense`; use `condense-deep` for longer-depth runs. */
+  skill?: string;
 }
 
 let REUSE: string | undefined;
@@ -54,6 +64,7 @@ const usage: { role: string; costUsd: number | null }[] = [];
 const adapters: Record<string, CliAdapter> = {
   claude: claudeAdapter(),
   opencode: opencodeAdapter(),
+  agy: agyAdapter(),
 };
 
 /** Run one CLI session and return its final text. */
@@ -108,7 +119,9 @@ function extractJson<T>(text: string): T {
 
 function loadQuiz(id: string): Quiz | null {
   const f = join(FIX, 'quizzes', `${id}.json`);
-  return existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as Quiz) : null;
+  if (!existsSync(f)) return null;
+  const quiz = JSON.parse(readFileSync(f, 'utf8')) as Quiz & { draft?: boolean };
+  return quiz.draft ? null : quiz; // drafts wait for the user's review
 }
 
 /** The questions this depth runs, with ids like C3.apply. */
@@ -276,7 +289,7 @@ function combine(
 async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = '') {
   const quiz = loadQuiz(t.id);
   if (!quiz) throw new Error(`no frozen quiz for ${t.id}`);
-  const out = join(outDir, t.id.slice(0, 40) + tag);
+  const out = join(outDir, t.id.slice(0, 60) + tag);
   mkdirSync(out, { recursive: true });
   const logFile = join(out, 'run.log');
   const log = (s: string) =>
@@ -288,13 +301,15 @@ async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = 
   //    `--reuse <label>` takes the guide from an earlier run instead (to re-test the reader and judge).
   let guide: string;
   let genCost: number | null = null;
-  const reused = REUSE ? join(ROOT, '_loop', REUSE, t.id.slice(0, 40), 'guide.md') : null;
+  const reused = REUSE ? join(ROOT, '_loop', REUSE, t.id.slice(0, 60), 'guide.md') : null;
+  const skillName = t.skill ?? 'condense';
+  const generatorRole: Role = t.depth === 'longer' ? 'generator-deep' : 'generator';
   if (reused && existsSync(reused)) {
     guide = readFileSync(reused, 'utf8');
   } else {
     log('generate');
     const lines = [
-      'Run the Studyo skill `condense`.',
+      `Run the Studyo skill \`${skillName}\`.`,
       '',
       'Parameters:',
       `- topic_path: ${topicPath}`,
@@ -303,7 +318,7 @@ async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = 
     if (coursePath) lines.push(`- course_path: ${coursePath}`);
     lines.push('- interactive: false', '- scope: all');
     if (t.depth === 'longer') lines.push('- depth: longer');
-    const gen = await ask('generator', lib, lines.join('\n'), {
+    const gen = await ask(generatorRole, lib, lines.join('\n'), {
       policy: 'work',
       system: SYSTEM,
       minutes: CFG.timeout_minutes.generate,
@@ -331,7 +346,7 @@ async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = 
   writeFileSync(join(out, 'reader.json'), JSON.stringify(reader, null, 1));
 
   // 3. Closed-book baseline, cached per topic and question set.
-  const baseFile = join(ROOT, '_loop', 'baseline', `${t.id.slice(0, 40)}-${t.depth}.json`);
+  const baseFile = join(ROOT, '_loop', 'baseline', `${t.id.slice(0, 60)}-${t.depth}.json`);
   let baseline: { answers: unknown[] };
   if (existsSync(baseFile)) baseline = JSON.parse(readFileSync(baseFile, 'utf8'));
   else {
@@ -373,11 +388,16 @@ async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = 
   let judged: Judged | null = null;
   for (let attempt = 1; attempt <= 2 && !judged; attempt++) {
     try {
-      const reply = await ask('judge', jdir, JUDGE_PROMPT(t.depth), {
-        policy: 'read-only',
-        minutes: CFG.timeout_minutes.judge,
-        log,
-      });
+      const reply = await ask(
+        t.depth === 'longer' ? 'judge-deep' : 'judge',
+        jdir,
+        JUDGE_PROMPT(t.depth),
+        {
+          policy: 'read-only',
+          minutes: CFG.timeout_minutes.judge,
+          log,
+        },
+      );
       const j = extractJson<Partial<Judged>>(reply.text);
       if (
         !Array.isArray(j.grounding) ||
@@ -387,6 +407,11 @@ async function scoreTopic(t: TopicCfg, skillsDir: string, outDir: string, tag = 
         !j.verdict
       ) {
         throw new Error('judge reply is missing a section');
+      }
+      const want = new Set(qs.map((q) => q.id));
+      const got = new Set((j.quiz as { id: string }[]).map((q) => q.id));
+      if (want.size !== got.size || [...want].some((id) => !got.has(id))) {
+        throw new Error('judge graded different questions than it was given');
       }
       j.verdict.weaknesses ??= [];
       judged = j as Judged;
@@ -497,9 +522,10 @@ function diffDirs(a: string, b: string): string {
 const EDITOR_PROMPT = (
   feedback: string,
   history: string,
-) => `You are improving a teaching skill for Studyo. The skill folder is the current directory: \`condense/SKILL.md\` is the skill, \`_shared/teaching-craft.md\` is a shared list of teaching moves it reads. Another model runs this skill on a topic, then a judge scores the result. Below is the judge's latest feedback on the skill's output.
+  skill = 'condense',
+) => `You are improving a teaching skill for Studyo. The skill folder is the current directory: \`${skill}/SKILL.md\` is the skill, \`_shared/teaching-craft.md\` is a shared list of teaching moves it reads. Another model runs this skill on a topic, then a judge scores the result. Below is the judge's latest feedback on the skill's output.
 
-Make ONE focused change that you expect to raise the score: a rule added, tightened, removed or reworded in \`condense/SKILL.md\`, or a move improved in \`_shared/teaching-craft.md\`. Rules:
+Make ONE focused change that you expect to raise the score: a rule added, tightened, removed or reworded in \`${skill}/SKILL.md\`, or a move improved in \`_shared/teaching-craft.md\`. Rules:
 - Edit only those two files. Keep the file's voice and density; short, direct instructions beat long ones. Prefer fixing the cause in a rule over adding a new rule.
 - Do not name or hint at any particular subject (no examples taken from the topics under test). The skill must improve for any material.
 - Never loosen the grounding rules: facts come only from the pack, with the basic-definition exception that is already there. Never remove the self-checks.
@@ -536,10 +562,16 @@ function better(c: Set, b: Set, margin: number) {
   return c.raw > b.raw + margin;
 }
 
-async function loop(label: string, apply: boolean, from?: string) {
+async function loop(label: string, apply: boolean, from?: string, deep = false) {
   const st = CFG.stopping;
-  const tune: TopicCfg[] = CFG.topics.filter((t: TopicCfg) => t.role === 'tune' && loadQuiz(t.id));
-  const held: TopicCfg[] = CFG.topics.filter((t: TopicCfg) => t.role !== 'tune' && loadQuiz(t.id));
+  const depth = deep ? 'longer' : 'default';
+  const editorRole: Role = deep ? 'editor-deep' : 'editor';
+  const tune: TopicCfg[] = CFG.topics.filter(
+    (t: TopicCfg) => t.role === 'tune' && t.depth === depth && loadQuiz(t.id),
+  );
+  const held: TopicCfg[] = CFG.topics.filter(
+    (t: TopicCfg) => t.role !== 'tune' && t.depth === depth && loadQuiz(t.id),
+  );
   const root = join(ROOT, '_loop', label);
   mkdirSync(root, { recursive: true });
   const bestDir = join(root, 'best-skills');
@@ -569,10 +601,19 @@ async function loop(label: string, apply: boolean, from?: string) {
     say(`iteration ${i}: editing`);
     const reason =
       (
-        await ask('editor', candDir, EDITOR_PROMPT(feedbackText(bestTune), history.join('\n')), {
-          policy: 'work',
-          minutes: 15,
-        })
+        await ask(
+          editorRole,
+          candDir,
+          EDITOR_PROMPT(
+            feedbackText(bestTune),
+            history.join('\n'),
+            deep ? 'condense-deep' : 'condense',
+          ),
+          {
+            policy: 'work',
+            minutes: 15,
+          },
+        )
       ).text
         .trim()
         .split('\n')
@@ -643,22 +684,31 @@ async function main() {
   };
   const label = arg('label') ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
   if (cmd === 'run') {
-    await loop(label, rest.includes('--apply'), arg('from'));
+    await loop(label, rest.includes('--apply'), arg('from'), rest.includes('--deep'));
     return;
   }
   if (cmd !== 'score') {
     console.log(
-      'usage: loop score [--skills <dir>] [--topics id,id | --role tune|held|regression] [--label name] [--reuse label]\n       loop run [--label name] [--apply]',
+      'usage: loop score [--skills <dir>] [--topics id,id | --role tune|held|regression] [--depth default|longer] [--label name] [--reuse label]\n       loop run [--label name] [--apply] [--deep]',
     );
     process.exit(cmd ? 1 : 0);
   }
   REUSE = arg('reuse');
+  const genModel = arg('gen-model');
+  if (genModel) {
+    CFG.models.generator.model = genModel;
+    CFG.models['generator-deep'].model = genModel;
+  }
   const skillsDir = resolve(ROOT, arg('skills') ?? 'skills');
   const ids = arg('topics')?.split(',');
   const role = arg('role');
-  const topics: TopicCfg[] = CFG.topics.filter((t: TopicCfg) =>
-    ids ? ids.includes(t.id) : role ? t.role === role : true,
-  );
+  const depthFilter = arg('depth') as 'default' | 'longer' | undefined;
+  const topics: TopicCfg[] = CFG.topics.filter((t: TopicCfg) => {
+    if (ids) return ids.includes(t.id);
+    if (role && t.role !== role) return false;
+    if (depthFilter && t.depth !== depthFilter) return false;
+    return true;
+  });
   const outDir = join(ROOT, '_loop', label);
   mkdirSync(outDir, { recursive: true });
   console.log(`scoring ${topics.length} topic(s) with ${skillsDir} -> ${outDir}`);
