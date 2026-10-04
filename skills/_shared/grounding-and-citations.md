@@ -51,6 +51,7 @@ Checks 1 to 4 apply to the assembling skills. A teaching skill writes no citatio
 2. Every URL in the text appears in the ledger.
 3. Every **direct quote** appears verbatim in the saved source file. Check with a text search such as `grep -F`. Fix or remove any that fail. (When a skill has no quotes, this check passes trivially.)
 4. The original block is unchanged: it matches the saved source text apart from the markers and any converted formatting.
+4b. **The conversion did not eat code.** Web pages and PDFs converted to Markdown can lose text after a `<` in a code listing (the converter reads `index < 5` as the start of a tag and drops everything up to the next `>`, closing fence included). Check every saved source and the pack: count the lines that start with three backticks (`grep -c '^ \{0,3\}```' file`). The count must be even. An odd count, or a line with prose and a `[Listing …]` caption on the same line as code, means a listing was damaged. Reopen the original page, restore the listing exactly, and fix both the saved source and the pack. An odd count left in the pack makes the whole document fail to render.
 5. **Faithfulness.** Nothing you wrote states a fact that no cited source states, and no simplification made a statement false. When a simplification would be false, qualify it ("roughly", "in most cases") or leave it out.
 
 Report failures honestly in the Gaps section or the final progress line. Do not hide them.
