@@ -1,0 +1,285 @@
+{
+ "topic": "pc-ca-mcts",
+ "depth": "default",
+ "profile": "non-specialist",
+ "frozen": "2026-10-04",
+ "note": "Concepts drawn once from the pack (standalone topic, no teaches). Questions marked default run at default depth; the rest are for the longer-depth run. Keys come from the pack only.",
+ "concepts": [
+  {
+   "id": "C1",
+   "name": "Who does what in today's web trust system",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does a certificate authority do, and what do browsers' root programs do?",
+     "key": "CAs validate domain ownership and attest to the binding of a domain name and a public key. Root programs are sets of policies that CAs must follow to be trusted by browsers (TLS clients)."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A website owner wants a certificate for their domain. Which party checks they control it, and what exactly does the certificate tie together?",
+     "key": "The CA checks. The certificate binds the domain name to a public key."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "In the MTC design, what stays the same about a CA's job and what changes?",
+     "key": "Same: validate control of a domain, bind it to a public key, issue certificates. Changed: instead of signing certificates and then logging them, the CA keeps a transparency log backed by a Merkle tree, and an inclusion proof that the certificate is in the tree is the trust anchor. CAs also run mirroring cosigners."
+    }
+   ]
+  },
+  {
+   "id": "C2",
+   "name": "Certificate transparency (CT)",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is certificate transparency, and what problem is it aimed at?",
+     "key": "Public, auditable, append-only, untrusted logs of all issued certificates, aimed at misissued certificates. A CA must submit each certificate to at least two public logs."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A CA issues a certificate it should not have. Does CT stop that? Who can notice, and how?",
+     "key": "No, the logs do not prevent misissue. They let interested parties, especially domain owners, detect it. Monitoring compares log records with what domain owners expected and reports suspicious activity."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why isn't \"this certificate appears in a CT log\" enough to say it is safe to trust?",
+     "key": "CT makes certificates publicly viewable, but that does not mean they were correctly issued or are safe to use. Monitoring is what checks them."
+    }
+   ]
+  },
+  {
+   "id": "C3",
+   "name": "Merkle tree and the signed treehead",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a Merkle tree, and what does signing its head cover?",
+     "key": "A binary hash tree. Each leaf corresponds to a certificate, each inner node is the hash of its children. Signing the treehead covers every certificate in the tree."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "Someone changes one certificate inside a tree that has already been signed. What happens?",
+     "key": "The treehead changes, so the signature breaks."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does the CA sign the tree's head instead of each certificate?",
+     "key": "The CA signs one root instead of many individual certificates, and that one signature covers all of them (batching), which keeps certificates compact."
+    }
+   ]
+  },
+  {
+   "id": "C4",
+   "name": "Inclusion proofs",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is an inclusion proof, and what else does a client need to use one?",
+     "key": "The hash of each sibling node along the path from the certificate to the treehead. The client also needs the signed treehead (a validated one)."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A tree has 8 certificates at its leaves. How many sibling hashes does the proof for one certificate contain?",
+     "key": "3, one sibling per level on the path up. (Worked from the definition; the pack does not state a formula.)"
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How is an inclusion proof different from a consistency proof?",
+     "key": "An inclusion proof shows a certificate is in the tree. A consistency proof shows that one version of a log contains a previous version, so the log is not showing different things to different people."
+    }
+   ]
+  },
+  {
+   "id": "C5",
+   "name": "Append-only logs and consistency",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does it mean for a log to be append-only, and why does it matter?",
+     "key": "Entries are only added, never changed. Consistency proofs show that a newer version contains the older one, so the log cannot quietly present different histories to different people."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "A CA shows one log state to one monitor and a different one to another. In the MTC design, what is there to catch this?",
+     "key": "The cosigner checks each new state is append-only and consistent with the previous tree, and its cosignature says another trusted party saw the same log state."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why is the CA's own signature on its log not enough on its own?",
+     "key": "A cosigner adds confidence that someone else observed the same state and verified the CA is not presenting different views of issuance. It also keeps certificates available for monitoring if the CA's log is down."
+    }
+   ]
+  },
+  {
+   "id": "C6",
+   "name": "The post-quantum scaling problem",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why can't we just swap post-quantum signatures into today's certificates?",
+     "key": "PQ signatures are much larger (the article says roughly 40 times). A typical handshake already carries five signatures and two public keys, so the overhead would be expensive for clients, CAs, logs and monitors. CT logs would need to store about 40 times more."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "ML-DSA-44 signatures are 2,420 bytes and its public keys 1,312 bytes. Using five signatures and two keys, about how big is that, and how does it compare to the 64-byte classical signature and key sizes?",
+     "key": "5 x 2,420 + 2 x 1,312 = 14,724 bytes, about 14.7 KB, against 7 x 64 = 448 bytes classical. (Arithmetic on the pack's numbers; the pack itself says '10s of kilobytes of overhead per handshake'.)"
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "One source says \"roughly 40 times larger\" and another says \"roughly 20-fold\". What does the text say about the difference?",
+     "key": "The pack states they differ and does not reconcile them. The 20-fold figure compares ML-DSA-44 with ECDSA-P256 sizes. A good answer says it is unresolved rather than inventing a reason."
+    }
+   ]
+  },
+  {
+   "id": "C7",
+   "name": "\"Issue by logging\"",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does \"don't log what you issue, issue by logging\" mean?",
+     "key": "Issuance and logging are coupled, so transparency is a requirement for operating rather than an add-on."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What goes wrong at scale when logging is an add-on, as it is today?",
+     "key": "Certificates get logged multiple times in different forms across multiple logs, so monitors must download and process every log. That is expensive and discourages a diverse set of log operators."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How does the MTC design avoid that duplication?",
+     "key": "The CA's issuance log is the source of truth. The log only carries hashes of public keys, with no per-entry signatures, and consumers fetch a single copy of each certificate."
+    }
+   ]
+  },
+  {
+   "id": "C8",
+   "name": "How an MTC gets issued",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Walk through what happens from a website asking for an MTC to receiving it.",
+     "key": "Request via ACME. The ACME server checks domain control. If it passes, the CA serializes the data and appends it to its log, computes the new log state and signs a checkpoint. It sends the state and checkpoint to a cosigner, which stores a copy and checks the new state is append-only and well formed. The CA then builds the MTC from the cosignatures, the server's public key and an inclusion proof, and sends it to the server."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "Someone who does not control a domain asks for a certificate for it. Where does the process stop?",
+     "key": "At the ACME server's domain-control check. Nothing is added to the log unless that passes."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does the checkpoint attest, and what does the cosignature add?",
+     "key": "The checkpoint attests that the CA issued every entry in the log's tree up to that point. The cosignature adds that another trusted party observed the same state and checked consistency."
+    }
+   ]
+  },
+  {
+   "id": "C9",
+   "name": "Mirroring cosigners and Chrome's policy",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What does a mirroring cosigner do?",
+     "key": "Stores a copy of the issuance log, verifies its append-only consistency, and makes the logs available to the wider ecosystem."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "What does Chrome's draft policy require for cosignatures?",
+     "key": "At least two: one from a Chrome-recognized mirroring cosigner run by a distinct organization, and one from the issuing MTC CA itself."
+    }
+   ]
+  },
+  {
+   "id": "C10",
+   "name": "Standalone vs landmark-relative certificates",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What are the two forms of MTC, and how do their signature values differ?",
+     "key": "Standalone: a cosigned tree head plus an inclusion proof. Landmark-relative: just a lightweight inclusion proof, no heavy post-quantum signatures, used when the client already has the cosigned tree heads out of band."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A freshly installed browser connects to a site. Which form can it use, and what must the site keep available?",
+     "key": "It may lack the relevant landmark, so it needs the standalone form. Servers should retain a standalone certificate fallback."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does the landmark form improve performance, and why isn't the standalone form dropped?",
+     "key": "A small set of batch signatures sent to clients out of band covers billions of certificates, so the handshake carries no large PQ signatures. Standalone is still needed for clients that are new, offline or missing the landmark update."
+    }
+   ]
+  },
+  {
+   "id": "C11",
+   "name": "What the Chrome experiment showed",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What did Cloudflare's experiment with Chrome find?",
+     "key": "A bootstrap CA served MTCs for some Cloudflare free-plan domains to 50% of Chrome Beta 146; billions were served. A landmark-relative handshake sends one public key, one signature and one inclusion proof under 1 kB. Median handshake was 9% faster than a classical chain."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "Why isn't the 9% speedup a clean measure of what MTCs offer?",
+     "key": "Most of it came from intermediate elision, and the test used classical signatures, so a bigger gain is expected with post-quantum ones."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "In the experiment, what was served when a landmark-relative certificate could not be negotiated?",
+     "key": "The traditional certificate chain (not a standalone MTC)."
+    }
+   ]
+  },
+  {
+   "id": "C12",
+   "name": "Risks and open questions",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a post-quantum downgrade, and what should a domain owner who has upgraded do about it?",
+     "key": "Clients falling back onto a legacy, non-PQ path. Domain owners should monitor CT logs for unexpectedly issued legacy certificates."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Name two things the article says still need to be answered.",
+     "key": "Any two of: whether independent monitors can consume and verify MTC logs at production volume; whether multiple CAs and cosigners will emerge; how browsers should balance landmark performance against fallback for clients without fresh landmarks."
+    }
+   ]
+  }
+ ]
+}

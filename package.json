@@ -17,7 +17,8 @@
     "build:web": "pnpm --filter @studyo/app build:web",
     "start": "pnpm build:web && pnpm --filter @studyo/server start",
     "demo": "node scripts/demo.mjs",
-    "deploy:web": "pnpm --filter @studyo/app deploy:web"
+    "deploy:web": "pnpm --filter @studyo/app deploy:web",
+    "loop": "pnpm --filter @studyo/server exec tsx ../../scripts/condense-loop/run.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

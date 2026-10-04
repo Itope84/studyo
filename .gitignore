@@ -28,3 +28,6 @@ coverage/
 test-results/
 playwright-report/
 !apps/app/.env.production
+
+# Condense tuning loop output
+_loop/

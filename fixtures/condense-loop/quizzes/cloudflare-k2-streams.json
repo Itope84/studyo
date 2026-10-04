@@ -1,0 +1,196 @@
+{
+ "topic": "cloudflare-k2-streams",
+ "depth": "default",
+ "profile": "developer",
+ "held_out": false,
+ "frozen": "2026-10-04",
+ "note": "Standalone topic (no teaches); concepts drawn once from the pack. Keys come from the pack only. Used as a regression check for default depth.",
+ "concepts": [
+  {
+   "id": "K1",
+   "name": "Decoupling producers and consumers",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why put a service between producers and consumers?",
+     "key": "With plain RPC, producers and consumers must align in scale and in time: too much data or an unavailable consumer means dropped events, and several consumers need to process independently. A service in the middle absorbs writes while independent readers consume at their own pace."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "An ecommerce backend emits an event for each completed transaction. An analytics system and a fraud detection service both need every event. How does K2 serve both?",
+     "key": "Both read the same stream, each through its own subscription so each gets all messages, at its own pace."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "How is decoupling through a log different from decoupling through a queue?",
+     "key": "In a queue, consumption removes items. In a log, production and consumption are completely decoupled: writes append, reads only advance an offset, so slow reads never block writes or use up space."
+    }
+   ]
+  },
+  {
+   "id": "K2",
+   "name": "Streams, offsets and retention",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a K2 stream, what is an offset, and when is data removed?",
+     "key": "An ordered, durable log of events. Writes append; reads advance an offset (pointer) within the log. Data is removed only by a configurable time-to-live (TTL)."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A consumer is down for three days. The stream's retention is 604,800 seconds. What does it find when it comes back?",
+     "key": "Nothing lost: 604,800 seconds is 7 days, longer than the outage, so the events are still retained. K2 supports long-term retention so even long consumer downtime does not lose data."
+    }
+   ]
+  },
+  {
+   "id": "K3",
+   "name": "Building a log on object storage",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "R2 does not support appends. How does K2 build a log on top of it?",
+     "key": "It accumulates writes in memory on an edge service, waits briefly for data to arrive, then writes the events as a segment file large enough to overcome per-file cost. Ordering and strictly incrementing offsets come from R2's atomic operations, without a separate coordination service."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "What does this design cost?",
+     "key": "Higher produce latency: writing to object storage is slower than a local disk and the batch has to accumulate first. About 1 second at p99 in the initial release."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why didn't Cloudflare run Kafka for this?",
+     "key": "The edge spans a huge number of servers in over 335 cities; stateful services get small, ephemeral slices of machines with networking over the public Internet, so traditional distributed systems like Kafka often cannot run. Offloading replication and consensus to R2 makes the application layer simpler, cheaper and faster, and lets compute and storage scale independently."
+    }
+   ]
+  },
+  {
+   "id": "K4",
+   "name": "Durability and strong consistency",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What do '11 nines of durability' and 'strongly consistent' mean for R2?",
+     "key": "Durability: 99.999999999% annual, so with 10,000,000 objects you would expect to lose one about every 10,000 years. Strongly consistent: the effect of an operation is observed globally and immediately by all clients, unlike eventual consistency where state can take up to a minute to propagate."
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Does 11 nines of durability mean your data is always available?",
+     "key": "No. Durability is the likelihood of data loss, not a guarantee of availability, and it is distinct from consistency."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Why does K2's design lean on these properties of R2?",
+     "key": "Highly durable storage with strongly consistent APIs lets K2 offload replication and consensus to the storage layer, which makes the K2 application layer radically simpler."
+    }
+   ]
+  },
+  {
+   "id": "K5",
+   "name": "Subscriptions and read parallelism",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What is a subscription, and what two delivery patterns does it support?",
+     "key": "Reads happen through subscriptions; each subscription receives all messages. Consumers can share one subscription (each gets a subset, for read parallelism) or each have their own (each gets all messages, pub/sub). The two can be mixed."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "Three teams each need every event, and one team runs five workers to share its load. How do you set that up?",
+     "key": "Three subscriptions, one per team. The five workers share their team's subscription."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What is the difference between starting a subscription at earliest and at latest?",
+     "key": "Earliest receives all retained data (not yet deleted by TTL). Latest receives events from the time the subscription is created."
+    }
+   ]
+  },
+  {
+   "id": "K6",
+   "name": "Leases, ack/nack and at-least-once delivery",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "What happens when a consumer calls consume, and what can it do with the batch?",
+     "key": "K2 leases the batch to that worker_id for five minutes, never to two workers at once and one lease per worker_id. The worker can ack (processed, lease released), nack (release immediately so it is redelivered), or extend (lease now expires five minutes after the request)."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "A worker crashes halfway through a batch. What happens?",
+     "key": "The lease expires after five minutes and K2 delivers the records again to the next worker that requests a batch."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "What does this mean for how you write consumers?",
+     "key": "Delivery is at least once, so a consumer may see the same record more than once and must cope with that. There is also no guarantee of processing order across workers sharing a subscription."
+    }
+   ]
+  },
+  {
+   "id": "K7",
+   "name": "Streams vs Queues vs Pipelines",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "When should you reach for K2 rather than Queues?",
+     "key": "Queues track individual items of expensive or time-consuming work, with per-item logic like retries, delays and dead-letter queues. K2 is for high-scale data movement, long-term retention and fan-out, with batched produce and consume, trading message-level retries for efficiency (and higher producer latency)."
+    },
+    {
+     "level": "apply",
+     "default": true,
+     "q": "An image-processing app must retry failed jobs and delay some of them. K2 or Queues?",
+     "key": "Queues, which support retries, delays and dead-letter queues at the level of a work item."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Where do Pipelines fit?",
+     "key": "Pipelines is recommended when the end result is writing events to object storage or Iceberg tables. K2 is for custom processing or writing to other destinations."
+    }
+   ]
+  },
+  {
+   "id": "K8",
+   "name": "Partitions and ordering",
+   "questions": [
+    {
+     "level": "explain",
+     "default": true,
+     "q": "Why are logs split into partitions, and what does the order guarantee cover?",
+     "key": "A single ordered log cannot scale on one machine. Partitions let clients read and write many brokers at once. Events with the same key go to the same partition, and order is guaranteed within a partition, not across the whole topic. (Pack background is from Kafka.)"
+    },
+    {
+     "level": "apply",
+     "default": false,
+     "q": "Events for customer 17 must be handled in order. What do you rely on?",
+     "key": "The same event key sends them to the same partition, and a consumer reads a partition's events in the order written."
+    },
+    {
+     "level": "discriminate",
+     "default": false,
+     "q": "Does K2 currently offer key-based ordering?",
+     "key": "No. Message keys and key-based ordering are on K2's roadmap as future work."
+    }
+   ]
+  }
+ ]
+}
