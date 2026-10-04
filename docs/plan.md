@@ -55,6 +55,11 @@ library/             user content, gitignored except the skeleton
 skills/, docs/, scripts/
 ```
 
+## Next up (in this order)
+
+1. **Grill the chat rework.** Run `/grill-me` (aihero.dev/skills-grill-me) in a fresh conversation, with plan mode off and the best model, on slice 8 below. Start from the learner's raw statement quoted there. The aim is a decided design for the `answer` skill (what it may use, in what order, how it explains), not code. Then build it. Not started.
+2. **A self-improving loop for the `condense` skill.** Straight after chat: grill the problem first ("improve `condense` until it writes like the best and most engaging technical communicators"), then build a loop that drafts, critiques against a defined bar, revises and keeps what scores better. Open for the grilling: what the bar is and who judges it, which sample material to test on, how to stop the loop, what it costs per run. Not started.
+
 ## Slices
 
 ### 0. Setup
@@ -172,6 +177,7 @@ Built Oct 3, 2026, replay only.
 - [x] `assignment` and `assignment-review` skills: optional context (text, link, file) or none; free-text, link or file submissions; review reads and never runs code
 - [ ] Real runs of all four skills
 - [ ] Spaced review from quiz history (data shape allows it; not built)
+- [ ] A "Grill me" quiz mode: adaptive rounds over a chapter's `teaches` and prerequisites, two or three short rounds, results saved as weak concepts (idea from the grill-me discussion, Oct 4, 2026)
 - [ ] Weak concepts from a quiz could offer a one-tap "ask about this" (only "Reread this" exists)
 
 ## Not in this plan
