@@ -28,7 +28,7 @@ A move's example below is an illustration of the shape. Do not reuse it in a doc
 
 **Say what would break.** For a design choice, ask what goes wrong without it. The failure explains the choice better than a description of it.
 
-**Close the loop.** End a part with a check the reader can do in their head: predict, spot, or choose. Give the answer right after it, not at the end of the document. Write it as a `predict` block (see the render contract) so the answer stays folded until the reader asks.
+**Close the loop.** End a part with a check the reader can do in their head: predict, spot, or choose. Give the answer right after it, not at the end of the document. Write it as a predict check (a quote, then the answer in a `<details>` block; see the render contract) so the answer stays folded until the reader asks.
 
 ## Code and tools
 
@@ -37,7 +37,7 @@ A move's example below is an illustration of the shape. Do not reuse it in a doc
 
 **Run, then read.** Show the code and its output before explaining the code. Explanation lands better after the reader has seen the behaviour.
 
-**Predict the output.** Before showing a result, ask what it will be, then show it (as a `predict` block). Use it when the answer is not obvious, or when the wrong answer is a common one.
+**Predict the output.** Before showing a result, ask what it will be, then show it (as a predict check). Use it when the answer is not obvious, or when the wrong answer is a common one.
 
 **Break it on purpose.** Show the error the reader will meet, and read the error message aloud: what it says, what it means, what to change. Treat the compiler or tool as a collaborator.
 

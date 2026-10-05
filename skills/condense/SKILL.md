@@ -72,7 +72,7 @@ Length follows what the learner needs. For a newcomer it may be much longer than
 - An analogy, when an idea is abstract and a good comparison genuinely helps. Most ideas do not need one. When you use one, say plainly in the text that it is an analogy, make sure it states no fact about the subject that the pack does not, and do not reuse the same analogy twice.
 - A diagram (`mermaid`) for relationships or processes the pack describes.
 - A picture reused from the pack or saved source assets. Never invent images.
-- A predict-then-reveal check (a `predict` block), for each central idea: after teaching it, ask the reader a short question they can answer by applying what they just read to a new case (a count, a next step, where something stops, why a figure misleads), then give the answer and the reasoning right after. Build it only from facts and numbers already stated in the text. Aim for one every few parts.
+- A predict-then-reveal check (a quote plus a folded `<details>` answer, see the render contract), for each central idea: after teaching it, ask the reader a short question they can answer by applying what they just read to a new case (a count, a next step, where something stops, why a figure misleads), then give the answer and the reasoning right after. Build it only from facts and numbers already stated in the text. Aim for one every few parts.
 - A table, when comparing things side by side.
 
 **Self-check for sameness before you finish.** Read the headings and first lines of every part together. If several parts open the same way, use the same device, or have the same shape, rewrite them to differ where the ideas allow. If you used an analogy or example in a part, ask whether the part would be clearer without it. If it would, cut it.

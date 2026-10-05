@@ -24,15 +24,15 @@ describe('render', () => {
     expect(readFileSync(condensed.htmlPath, 'utf8')).toContain('class="mermaid"');
   });
 
-  it('renders a predict block with the answer folded away', () => {
-    const { html } = render(
-      '```predict\nWhat does `x` print?\n---reveal---\nIt prints **5**.\n```',
-      opts,
+  it('renders a predict check as a quote followed by a folded answer, code and all', () => {
+    const md =
+      '> **Predict.** What prints?\n>\n> ```rust\n> let x = 5;\n> ```\n\n<details><summary>Reveal</summary>\n\nIt prints **5**:\n\n```rust\nprintln!("{x}");\n```\n\n</details>';
+    const { html } = render(md, opts);
+    expect(html).toMatch(
+      /<blockquote>[\s\S]*What prints\?[\s\S]*<\/blockquote>\s*<details>\s*<summary>Reveal<\/summary>/,
     );
-    expect(html).toContain('class="predict"');
-    expect(html).toMatch(/<details class="reveal"><summary[^>]*>Reveal<\/summary>/);
-    expect(html).toMatch(/What does <code>x<\/code> print\?/);
-    expect(() => render('```predict\nno answer here\n```', opts)).toThrow(/---reveal---/);
+    expect(html).toContain('<strong>5</strong>');
+    expect(html).toMatch(/<details>[\s\S]*<pre>[\s\S]*<\/details>/);
   });
 
   it('fails loudly on unknown directives and callout kinds', () => {

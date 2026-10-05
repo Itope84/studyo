@@ -112,15 +112,10 @@ iframe.freeform-html { width: 100%; border: 1px solid var(--rule); border-radius
 details { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 14px; margin: 0 0 18px; }
 summary { cursor: pointer; font-family: ${tokens.font.apparatus}; font-size: 14px; font-weight: 500; }
 
-/* Predict block: the question reads like a quote, the answer stays folded until asked for */
-.predict { margin: 0 0 18px; padding: 2px 0 2px 18px; border-left: 2px solid var(--rule-strong); }
-.predict-label {
-  display: block; font-family: ${tokens.font.apparatus}; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--lead); margin-bottom: 6px;
-}
-.predict > p { font-style: italic; color: var(--lead); }
-.predict > details.reveal { margin: 4px 0 0; background: var(--surface); }
-.predict > details.reveal > :last-child { margin-bottom: 0; }
+/* A predict check is a quote (the question) followed by a details (the folded answer) */
+blockquote:has(+ details) { margin-bottom: 6px; }
+blockquote + details { margin-top: 0; background: var(--surface); }
+blockquote + details > :last-child { margin-bottom: 0; }
 
 /* Maths */
 .katex { font-size: 1.04em; }
@@ -140,7 +135,7 @@ summary { cursor: pointer; font-family: ${tokens.font.apparatus}; font-size: 14p
   h2 { font-size: 17pt; margin-top: 26pt; }
   h3 { font-size: 13.5pt; }
   h2, h3, h4 { break-after: avoid; }
-  .callout, .predict, figure, table, pre, .diagram, .katex-display, blockquote, .added-note { break-inside: avoid; }
+  .callout, figure, table, pre, .diagram, .katex-display, blockquote, .added-note { break-inside: avoid; }
   a { color: inherit; text-decoration: none; }
   a.cite { background: none; padding: 0; }
   .print-refs { display: block; break-before: page; }

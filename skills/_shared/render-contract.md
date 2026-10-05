@@ -39,7 +39,21 @@ Fenced blocks the renderer turns into components. **Prefer a component.** Reach 
 
 - `` ```callout kind=<kind> `` with an optional `title="..."`. Kinds: `definition` (in a pack: states what a source says and carries a citation; in a condensed doc there are no citations), `key-idea`, `watch-out`, `example`, `analogy` (say plainly that it is one), `note`. Body is Markdown.
 - `` ```details summary="..." ``: a collapsible block for optional depth. Body is Markdown.
-- `` ```predict ``: a predict-then-reveal check. The question first, then a line containing only `---reveal---`, then the answer and its reasoning (both Markdown). The reader sees the question and clicks to reveal the answer. Use it for every predict check instead of writing "Predict" and "Reveal" as paragraphs or inside a callout. Build the question only from facts the text has already stated.
+- **Predict-then-reveal check:** the question as a blockquote, then the answer folded in an HTML `<details>` block. Write it exactly like this, with a blank line after `<summary>` and before `</details>`:
+
+  ```
+  > **Predict.** What does this print?
+  >
+  > (code in the question goes inside the quote, each line starting with `> `)
+
+  <details><summary>Reveal</summary>
+
+  The answer and its reasoning, in ordinary Markdown. Code blocks are fine here.
+
+  </details>
+  ```
+
+  Use this for every predict check; do not use a fenced block for it (a code block inside a fence closes the fence early). Build the question only from facts the text has already stated.
 - `` ```mermaid ``: diagram. Only for relationships or processes that a source describes. Put the citation in the line below the block. Wide diagrams scroll sideways on a phone, so prefer `flowchart TD` (top-down) when there are more than four steps.
 - Figures: `![caption](assets/file.png)` followed in a pack on the next line by `*Source: [S4](url)*`. Image credit goes in the ledger. Condensed docs have no source line. An image alone in its paragraph becomes a captioned figure.
 
