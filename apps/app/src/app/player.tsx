@@ -35,7 +35,6 @@ export default function Player() {
   const speed = usePrefs((s) => s.speed);
   const topic = useTopic(track?.topicId ?? '');
   const [width, setWidth] = useState(1);
-  const [marked, setMarked] = useState(false);
   const [sheet, setSheet] = useState<null | 'chapters' | 'bookmark'>(null);
 
   if (!track) {
@@ -50,6 +49,7 @@ export default function Player() {
     );
   }
 
+  const marked = !!topic.data?.progress.items[track.resource.id]?.done;
   const fraction = duration > 0 ? Math.min(1, position / duration) : 0;
   const index = queue.findIndex((t) => t.resource.id === track.resource.id);
   const upNext = index >= 0 ? queue.slice(index + 1) : [];
@@ -319,11 +319,8 @@ export default function Player() {
         />
         <Tile
           icon={marked ? 'check-circle' : 'task-alt'}
-          label={marked ? 'Done' : 'Mark done'}
-          onPress={async () => {
-            await markDone();
-            setMarked(true);
-          }}
+          label={marked ? 'Done · tap to undo' : 'Mark done'}
+          onPress={() => markDone(!marked)}
         />
         <Tile
           icon="format-list-bulleted"

@@ -76,6 +76,21 @@ describe('server basics', () => {
     expect((await s.app.request(`/f/${info.file_token}/_studyo/token`)).status).toBe(404);
   });
 
+  it('lets a document be marked read and then unmarked', async () => {
+    s = await makeServer();
+    const put = (done: boolean, updated: string) =>
+      s.call('PUT', '/topics/pc-ca-mcts/progress', {
+        resource_id: 'pack',
+        position: done ? 1 : 0.4,
+        done,
+        updated,
+      });
+    await put(true, '2026-10-05T10:00:00.000Z');
+    const undone = (await put(false, '2026-10-05T10:01:00.000Z')).json;
+    expect(undone.items.pack.done).toBe(false);
+    expect(undone.items.pack.position).toBeCloseTo(0.4, 2);
+  });
+
   it('derives descriptions, read times, summary and progress', async () => {
     s = await makeServer();
     const detail = (await s.call('GET', '/topics/pc-ca-mcts')).json;

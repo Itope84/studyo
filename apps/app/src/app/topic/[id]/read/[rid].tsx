@@ -42,18 +42,19 @@ export default function Reader() {
   const saved = topic.data?.progress.items[rid];
 
   useEffect(() => {
-    if (saved?.done) setDone(true);
+    setDone(!!saved?.done);
   }, [saved?.done]);
 
   const save = useCallback(
     async (fraction: number, sec: string | null, markDone?: boolean) => {
+      // markDone: true or false sets the mark; left out keeps it as it is.
       lastSave.current = Date.now();
       try {
         await api.saveProgress(id, {
           resource_id: rid,
           position: fraction,
           section: sec,
-          done: markDone || undefined,
+          done: markDone,
           updated: new Date().toISOString(),
         });
       } catch {
@@ -140,10 +141,15 @@ export default function Reader() {
               <IconButton
                 name={done ? 'check-circle' : 'check-circle-outline'}
                 tone={done ? 'sage' : 'ink'}
-                label={done ? 'Marked as read' : 'Mark as read'}
+                label={done ? 'Marked as read. Tap to undo' : 'Mark as read'}
                 onPress={async () => {
-                  setDone(true);
-                  await save(1, pending.current?.section ?? null, true);
+                  const next = !done;
+                  setDone(next);
+                  await save(
+                    next ? 1 : (pending.current?.fraction ?? saved?.position ?? 0),
+                    pending.current?.section ?? null,
+                    next,
+                  );
                   await queryClient.invalidateQueries({ queryKey: keys.topic(id) });
                   await queryClient.invalidateQueries({ queryKey: keys.topics });
                 }}

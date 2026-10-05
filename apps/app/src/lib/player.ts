@@ -50,13 +50,14 @@ function ensurePlayer(): AudioPlayer {
       duration: s.duration || usePlayer.getState().track?.resource.duration || 0,
       error: s.error ?? null,
     });
-    if (s.playing && Date.now() - lastSaved > 10_000) void saveProgress(false);
+    if (s.playing && Date.now() - lastSaved > 10_000) void saveProgress();
     if (s.didJustFinish) void finished();
   });
   return player;
 }
 
-async function saveProgress(done: boolean) {
+/** `done`: true or false to set the mark, left out to keep it as it is. */
+async function saveProgress(done?: boolean) {
   const { track, position, duration } = usePlayer.getState();
   if (!track) return;
   lastSaved = Date.now();
@@ -65,10 +66,10 @@ async function saveProgress(done: boolean) {
       resource_id: track.resource.id,
       position,
       duration: duration || null,
-      done: done || undefined,
+      done,
       updated: new Date().toISOString(),
     });
-    if (done) {
+    if (done !== undefined) {
       void queryClient.invalidateQueries({ queryKey: keys.topic(track.topicId) });
       void queryClient.invalidateQueries({ queryKey: keys.topics });
     }
@@ -115,7 +116,7 @@ export async function play(track: Track, queue: Track[] = [track], startAt?: num
   }
   const current = usePlayer.getState().track;
   if (current?.resource.id !== track.resource.id || current.topicId !== track.topicId) {
-    if (current) await saveProgress(false);
+    if (current) await saveProgress();
     // Native players can carry the Cloudflare Access token; browsers can't, which is why /f/* is bypassed.
     const cfToken = usePrefs.getState().connection?.cfToken;
     p.replace(
@@ -150,7 +151,7 @@ export function toggle() {
   const p = ensurePlayer();
   if (usePlayer.getState().playing) {
     p.pause();
-    void saveProgress(false);
+    void saveProgress();
   } else p.play();
 }
 
@@ -160,7 +161,7 @@ export async function seek(seconds: number) {
   const to = Math.max(0, Math.min(duration || seconds, seconds));
   usePlayer.setState({ position: to });
   await p.seekTo(to).catch(() => {});
-  void saveProgress(false);
+  void saveProgress();
 }
 
 export const skip = (delta: number) => seek(usePlayer.getState().position + delta);
@@ -170,12 +171,12 @@ export function setSpeed(rate: number) {
   player?.setPlaybackRate(rate);
 }
 
-export async function markDone() {
-  await saveProgress(true);
+export async function markDone(done = true) {
+  await saveProgress(done);
 }
 
 export function stop() {
-  void saveProgress(false);
+  void saveProgress();
   player?.pause();
   try {
     player?.setActiveForLockScreen(false);
