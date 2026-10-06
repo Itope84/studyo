@@ -9,6 +9,7 @@ Plain-file skills that run the same from Claude Code, OpenCode or the job runner
 | `enrich-topic` | Topic started from a name | Standard, bounded. Finds an anchor source, then follows `enrich-document` |
 | `enrich-deep` | Only when the user asks, on a topic with a pack | Deep, large budget, verification and counter-review |
 | `condense` | Only when the user asks | Teaches the pack's material at the learner's level; facts from the pack, explanation is its own |
+| `narrate` | Only when the user asks for audio | Turns a condensed document into a spoken script (JSON, two hosts or one narrator), complete in coverage and written for the ear, in parts; the server turns it into sound |
 | `answer` | Chat in a topic, chapter or course | Read-only, no web. Rework planned |
 | `course-outline` | Course from a PDF or link | Structure only, never the whole book. Asks to approve the outline, then what you know |
 | `course-plan` | Course from a subject name | Finds a spine (syllabus, textbook), then `course-outline` |
