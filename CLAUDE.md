@@ -51,6 +51,7 @@ pnpm deploy:web       # export the web app and deploy the Worker
 
 ## Working rules and traps
 
+- **Test skills through OpenCode, not Claude Code.** OpenCode is what runs in production, and running skills under `claude -p` burns the user's tokens. When trying a skill by hand, use `opencode run` (or the replay adapter if no model is needed).
 - **Don't touch the user's running server on :8787/:8788.** Use spare ports for test servers. Never write test data into `library/`.
 - Ask the user to flip dashboard settings (Cloudflare DNS, zone settings, Access) instead of coding around missing permissions. Wrangler's login can deploy Workers but can't edit DNS or zone settings. `cloudflared tunnel route dns` creates records in fitnerapp.com (wrong zone): don't use it.
 - Expo SDK 57: read `apps/app/AGENTS.md`; check installed type definitions before using an Expo API; install with `npx expo install`.
