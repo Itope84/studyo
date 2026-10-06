@@ -31,3 +31,5 @@ playwright-report/
 
 # Condense tuning loop output
 _loop/
+# Local planning notes (kept on disk, not published)
+plan.md
