@@ -206,8 +206,12 @@ export const api = {
     request<Quiz>('GET', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
   createQuiz: (scope: string, body: CreateQuiz) =>
     request<QuizWithJob>('POST', `/topics/${enc(scope)}/quizzes`, body),
-  deleteResource: (topicId: string, resourceId: string) =>
-    request<void>('DELETE', `/topics/${enc(topicId)}/resources/${enc(resourceId)}`),
+  /** `audio: true` also deletes the audio made from a condensed doc; by default that stays. */
+  deleteResource: (topicId: string, resourceId: string, opts: { audio?: boolean } = {}) =>
+    request<void>(
+      'DELETE',
+      `/topics/${enc(topicId)}/resources/${enc(resourceId)}${opts.audio ? '?audio=true' : ''}`,
+    ),
   deleteQuiz: (scope: string, id: string) =>
     request<void>('DELETE', `/topics/${enc(scope)}/quizzes/${enc(id)}`),
   submitAttempt: (scope: string, id: string, body: SubmitAttempt) =>

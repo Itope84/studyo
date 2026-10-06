@@ -12,6 +12,7 @@ export const jobLabel = (job: Job) =>
     enrich: 'Building your study pack',
     'enrich-deep': 'Going deeper',
     condense: 'Writing a condensed doc',
+    audio: 'Making your audio',
     answer: 'Chat reply',
     'course-outline': 'Planning your course',
     quiz: 'Writing a quiz',

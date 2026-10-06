@@ -184,8 +184,10 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete a condensed doc
-         * @description Removes the document, its rendered HTML and PDF, and its reading progress. Only condensed docs can be deleted this way.
+         * Delete a condensed doc or a generated audio
+         * @description Removes a condensed doc, its rendered HTML and PDF, and its reading progress. Its audio stays unless `audio=true`
+         *     is given, which also removes every generated audio made from it. A generated audio (one the app made from a doc)
+         *     can be deleted too, with its script and listening progress. Packs, uploads and sources cannot be deleted this way.
          */
         delete: operations["deleteResource"];
         options?: never;
@@ -368,7 +370,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start an enrich, deep enrich or condense job */
+        /** Start an enrich, deep enrich, condense or audio job */
         post: operations["createJob"];
         delete?: never;
         options?: never;
@@ -890,6 +892,14 @@ export interface components {
         ServerInfo: {
             version: string;
             file_token: string;
+            /** @description Whether the server can turn a script into audio (a voice key and ffmpeg). */
+            audio: {
+                available: boolean;
+                /** @description When not available, one plain sentence on what is missing. */
+                reason: string | null;
+                /** @description The voice engine, for example Gemini */
+                engine?: string | null;
+            };
             clis: components["schemas"]["CliInfo"][];
             settings: components["schemas"]["Settings"];
             storage: {
@@ -957,6 +967,13 @@ export interface components {
             scope?: "all" | string[] | null;
             /** @description For condensed docs made by the app, the learner's request that steered the run. */
             notes?: string | null;
+            /** @description For audio made by the app, the id of the condensed doc it was made from. The doc may have been replaced or deleted since. */
+            source_id?: string | null;
+            /**
+             * @description For audio made by the app, one narrator or two hosts.
+             * @enum {integer|null}
+             */
+            voices?: 1 | 2 | null;
         };
         Learning: {
             goal?: string;
@@ -1118,7 +1135,7 @@ export interface components {
             updated: string;
         };
         /** @enum {string} */
-        JobKind: "enrich" | "enrich-deep" | "condense" | "answer" | "course-outline" | "quiz" | "quiz-grade" | "assignment" | "assignment-review";
+        JobKind: "enrich" | "enrich-deep" | "condense" | "audio" | "answer" | "course-outline" | "quiz" | "quiz-grade" | "assignment" | "assignment-review";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "needs_input" | "succeeded" | "failed" | "cancelled";
         Job: {
@@ -1179,16 +1196,25 @@ export interface components {
         CondenseDepth: "default" | "longer";
         CreateJob: {
             /** @enum {string} */
-            kind: "enrich" | "enrich-deep" | "condense";
-            /** @description For condense, `all` or a list of pack section ids */
+            kind: "enrich" | "enrich-deep" | "condense" | "audio";
+            /** @description For condense, `all` or a list of pack section ids. For audio, `all` or a list of the doc's section headings. */
             scope?: "all" | string[];
             /** @description For enrich-deep, what to go deeper on */
             focus?: string;
             depth?: components["schemas"]["CondenseDepth"];
             /** @description For condense, what the learner wants covered or stressed. Steers focus only; facts still come from the pack. */
             notes?: string;
-            /** @description For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything. */
+            /** @description For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything. For audio, the id of an audio this run replaces once it succeeds. */
             replace?: string;
+            /** @description For audio, the id of the condensed doc to turn into audio. */
+            source?: string;
+            /**
+             * @description For audio (and for condense with `audio`), one narrator or a host and a co-host. Default 2.
+             * @enum {integer}
+             */
+            voices?: 1 | 2;
+            /** @description For condense, also make audio from the doc once it is written. With `replace`, the audio made from the replaced doc is replaced too. Default false. */
+            audio?: boolean;
         };
         /** @description Written by a skill when it needs the learner. The job waits in needs_input until answered. */
         QuestionSet: {
@@ -2049,7 +2075,10 @@ export interface operations {
     };
     deleteResource: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When deleting a condensed doc, also delete the audio made from it. Default false. */
+                audio?: boolean;
+            };
             header?: never;
             path: {
                 topic_id: components["parameters"]["TopicId"];

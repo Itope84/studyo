@@ -59,6 +59,7 @@ export class Push {
       title =
         {
           condense: 'Condensed doc ready',
+          audio: 'Audio ready',
           'course-outline': 'Course outline ready',
           quiz: 'Quiz ready',
           assignment: 'Take-home ready',

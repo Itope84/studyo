@@ -1,14 +1,29 @@
+import type { Resource } from '@studyo/api';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
+import { ListenSheet } from '@/components/AudioSheets';
 import { DocFrame } from '@/components/DocFrame';
 import type { DocFrameHandle, DocMessage } from '@/components/DocFrame.types';
+import { CondenseSheet, DeleteDocSheet } from '@/components/DocSheets';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Sheet } from '@/components/Sheet';
-import { Header, IconButton, Loading, Notice, ProgressBar, Row, Screen, T } from '@/components/ui';
+import {
+  Header,
+  Icon,
+  IconButton,
+  Loading,
+  Notice,
+  ProgressBar,
+  Row,
+  Screen,
+  T,
+} from '@/components/ui';
 import { ApiError, api, fileUrl } from '@/lib/api';
-import { useServerInfo, useTopic } from '@/lib/hooks';
+import { audioFor, isGeneratedAudio } from '@/lib/audio';
+import { useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { play, topicQueue } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
 import { space, useTheme } from '@/theme';
 
@@ -22,9 +37,15 @@ export default function Reader() {
   const { scheme } = useTheme();
   const topic = useTopic(id);
   const server = useServerInfo();
+  const { online } = useOnline();
+  const job = useTopicJob(id);
   const frame = useRef<DocFrameHandle>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [listenOpen, setListenOpen] = useState(false);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [removing, setRemoving] = useState<Resource | null>(null);
   const [pos, setPos] = useState<{ fraction: number; section: string | null } | null>(null);
   const [headings, setHeadings] = useState<{ id: string; depth: number; text: string }[]>([]);
   const [done, setDone] = useState(false);
@@ -40,6 +61,45 @@ export default function Reader() {
   });
   const resource = topic.data?.topic.resources.find((r) => r.id === rid);
   const saved = topic.data?.progress.items[rid];
+  const isCondensed = resource?.type === 'condensed';
+  const allResources = topic.data?.topic.resources ?? [];
+  const audios = allResources.filter(isGeneratedAudio);
+  const docAudio = isCondensed ? audioFor(allResources, rid).at(-1) : undefined;
+  const pack = allResources.find((r) => r.type === 'pack');
+  // The job that is making this topic's audio right now, including a condense that will be followed by audio.
+  const makingAudio =
+    !!job && (job.kind === 'audio' || (job.kind === 'condense' && job.params?.audio === true));
+
+  const toggleRead = async () => {
+    const next = !done;
+    setDone(next);
+    await save(
+      next ? 1 : (pending.current?.fraction ?? saved?.position ?? 0),
+      pending.current?.section ?? null,
+      next,
+    );
+    await queryClient.invalidateQueries({ queryKey: keys.topic(id) });
+    await queryClient.invalidateQueries({ queryKey: keys.topics });
+  };
+
+  // Listen: play the audio if it exists, show progress while it is being made, otherwise offer to make it.
+  const onListen = async () => {
+    if (makingAudio && job) {
+      router.push(`/job/${job.id}`);
+      return;
+    }
+    if (!docAudio) {
+      setListenOpen(true);
+      return;
+    }
+    const token = server.data?.file_token;
+    const t = topic.data?.topic;
+    if (!token || !t) return;
+    const queue = topicQueue(id, t.title, t.resources, token, t.cover_path ?? null);
+    const track = queue.find((q) => q.resource.id === docAudio.id);
+    const item = topic.data?.progress.items[docAudio.id];
+    if (track) await play(track, queue, item && !item.done ? item.position : 0);
+  };
 
   useEffect(() => {
     setDone(!!saved?.done);
@@ -127,32 +187,31 @@ export default function Reader() {
                 onPress={() => setOutlineOpen(true)}
                 disabled={!headings.length}
               />
-              <IconButton
-                name="file-download"
-                label="Download as PDF or Markdown"
-                onPress={() => setDownloadOpen(true)}
-                disabled={!resource}
-              />
+              {isCondensed ? (
+                <IconButton
+                  name={makingAudio ? 'hourglass-top' : 'headphones'}
+                  tone={docAudio ? 'primary' : 'ink'}
+                  label={
+                    makingAudio
+                      ? 'Making audio. See progress'
+                      : docAudio
+                        ? 'Listen to this doc'
+                        : 'Listen: make audio from this doc'
+                  }
+                  onPress={() => void onListen()}
+                  disabled={!online}
+                />
+              ) : null}
               <IconButton
                 name="forum"
                 label="Ask about this"
                 onPress={() => router.push(`/topic/${id}/chat`)}
               />
               <IconButton
-                name={done ? 'check-circle' : 'check-circle-outline'}
-                tone={done ? 'sage' : 'ink'}
-                label={done ? 'Marked as read. Tap to undo' : 'Mark as read'}
-                onPress={async () => {
-                  const next = !done;
-                  setDone(next);
-                  await save(
-                    next ? 1 : (pending.current?.fraction ?? saved?.position ?? 0),
-                    pending.current?.section ?? null,
-                    next,
-                  );
-                  await queryClient.invalidateQueries({ queryKey: keys.topic(id) });
-                  await queryClient.invalidateQueries({ queryKey: keys.topics });
-                }}
+                name="more-vert"
+                label="More"
+                onPress={() => setMenuOpen(true)}
+                disabled={!resource}
               />
             </>
           }
@@ -188,6 +247,85 @@ export default function Reader() {
         onClose={() => setDownloadOpen(false)}
         topicId={id}
         resource={resource ?? null}
+      />
+      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title="This document">
+        <Row
+          title="Download"
+          subtitle="As PDF or Markdown"
+          leading={<Icon name="file-download" size={20} />}
+          onPress={() => {
+            setMenuOpen(false);
+            setDownloadOpen(true);
+          }}
+          disabled={!resource}
+        />
+        <Row
+          title={done ? 'Marked as read. Tap to undo' : 'Mark as read'}
+          leading={
+            <Icon
+              name={done ? 'check-circle' : 'check-circle-outline'}
+              size={20}
+              tone={done ? 'sage' : 'ink'}
+            />
+          }
+          onPress={() => {
+            setMenuOpen(false);
+            void toggleRead();
+          }}
+        />
+        {isCondensed ? (
+          <>
+            <Row
+              title="Regenerate"
+              subtitle="Write a fresh version. You can regenerate its audio too."
+              leading={<Icon name="autorenew" size={20} />}
+              onPress={() => {
+                setMenuOpen(false);
+                setRegenOpen(true);
+              }}
+              disabled={!online || !!job}
+              disabledReason={!online ? 'Needs the server' : 'Wait for the current job'}
+            />
+            <Row
+              title="Delete"
+              subtitle="Its audio stays unless you choose to delete it too."
+              leading={<Icon name="delete-outline" size={20} tone="danger" />}
+              onPress={() => {
+                setMenuOpen(false);
+                if (resource) setRemoving(resource);
+              }}
+              disabled={!online || !!job}
+              disabledReason={!online ? 'Needs the server' : 'Wait for the current job'}
+            />
+          </>
+        ) : null}
+      </Sheet>
+      <ListenSheet
+        open={listenOpen}
+        onClose={() => setListenOpen(false)}
+        topicId={id}
+        docs={isCondensed && resource ? [resource] : []}
+        fixedDoc={isCondensed ? (resource ?? null) : null}
+        hasPack={!!pack}
+        isCourse={!!topic.data?.topic.course}
+        onStarted={() => router.back()}
+      />
+      <CondenseSheet
+        open={regenOpen}
+        onClose={() => setRegenOpen(false)}
+        topicId={id}
+        packId={pack?.id ?? null}
+        isCourse={!!topic.data?.topic.course}
+        regenerate={isCondensed ? (resource ?? null) : null}
+        audios={audios}
+        onStarted={() => router.back()}
+      />
+      <DeleteDocSheet
+        doc={removing}
+        onClose={() => setRemoving(null)}
+        topicId={id}
+        audios={audios}
+        onDeleted={() => router.back()}
       />
       <Sheet open={outlineOpen} onClose={() => setOutlineOpen(false)} title="Outline">
         {headings

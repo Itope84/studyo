@@ -1,0 +1,43 @@
+{
+  "steps": [
+    {
+      "delay": 100,
+      "event": {
+        "type": "text",
+        "text": "[studyo] narrate: starting"
+      }
+    },
+    {
+      "delay": 200,
+      "event": {
+        "type": "tool",
+        "name": "Read",
+        "summary": "Opening the condensed doc"
+      }
+    },
+    {
+      "delay": 100,
+      "write": {
+        "path": "{{params.output_path}}",
+        "content": "{\"version\": 1, \"title\": \"The demo, out loud\", \"voices\": 2, \"minutes\": 0, \"words\": 0, \"source_path\": \"\", \"parts\": [{\"n\": 1, \"title\": \"What it is\"}, {\"n\": 2, \"title\": \"Why it matters\"}], \"skipped\": [], \"segments\": [{\"id\": \"s1\", \"part\": 1, \"speaker\": \"cohost\", \"text\": \"Here is a puzzle. Why would anyone bother with this demo at all?\", \"tone\": \"curious\", \"pace\": \"normal\", \"pause_after\": \"medium\", \"emphasis\": [\"puzzle\"]}, {\"id\": \"s2\", \"part\": 1, \"speaker\": \"host\", \"text\": \"Because it shows the whole pipeline working end to end. A link goes in. A study pack comes out.\", \"tone\": \"neutral\", \"pace\": \"normal\", \"pause_after\": \"short\", \"emphasis\": []}, {\"id\": \"s3\", \"part\": 2, \"speaker\": \"host\", \"text\": \"Last time we saw what it is. Now, why it matters. It saves you reading everything yourself.\", \"tone\": \"warm\", \"pace\": \"normal\", \"pause_after\": \"long\", \"emphasis\": []}, {\"id\": \"s4\", \"part\": 2, \"speaker\": \"cohost\", \"text\": \"So you keep the sources and skip the slog?\", \"tone\": \"curious\", \"pace\": \"normal\", \"pause_after\": \"short\", \"emphasis\": []}]}"
+      }
+    },
+    {
+      "delay": 100,
+      "event": {
+        "type": "text",
+        "text": "[studyo] narrate: done. 2 parts, 4 segments, 0 skipped."
+      }
+    },
+    {
+      "delay": 20,
+      "event": {
+        "type": "result",
+        "ok": true,
+        "text": "done",
+        "error": null,
+        "costUsd": 0.01
+      }
+    }
+  ]
+}

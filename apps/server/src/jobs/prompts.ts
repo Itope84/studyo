@@ -24,6 +24,8 @@ export function skillFor(
       return 'enrich-deep';
     case 'condense':
       return params?.depth === 'longer' ? 'condense-deep' : 'condense';
+    case 'audio':
+      return 'narrate';
     case 'answer':
       return 'answer';
     case 'course-outline':
@@ -81,6 +83,18 @@ export function startPrompt(i: PromptInput): string {
     lines.push(
       '',
       'Reply with the answer only (Markdown). It is shown in the app as the chat reply.',
+    );
+    return lines.join('\n');
+  }
+  if (kind === 'audio') {
+    const scope = params.scope ?? 'all';
+    lines.push(
+      '- interactive: false',
+      `- source_path: ${String(params.source_path)}`,
+      `- scope: ${Array.isArray(scope) ? scope.join('; ') : String(scope)}`,
+      `- voices: ${Number(params.voices ?? 2)}`,
+      `- output_path: ${String(params.output_path)}`,
+      '  (relative to the topic folder; write the script exactly here and never overwrite another script)',
     );
     return lines.join('\n');
   }

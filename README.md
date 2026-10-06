@@ -85,8 +85,19 @@ STUDYO_ORIGINS=https://studyo.pages.dev   # your web app's origin(s); also used 
 | `STUDYO_ORIGINS` | `*` | Allowed browser origins (comma separated); also where Access sign-ins may return |
 | `STUDYO_APP_URLS` | unset | Extra return addresses for Access sign-ins |
 | `STUDYO_REPLAY` | unset | Replay scripts instead of real CLIs |
+| `GEMINI_API_KEY` | unset | Turns on audio: the key for Gemini text-to-speech (a free Google AI Studio key works, see below) |
 
 Which CLI runs jobs, and an optional model for each, are set in the app under Settings.
+
+## Audio (listen to a condensed doc)
+
+The Listen button turns a condensed document into a two-host spoken conversation. The `narrate` skill (run by Claude Code or OpenCode) writes the script, then the server turns it into audio with Gemini text-to-speech and saves it in the topic's `outputs/audio/`.
+
+You need:
+- **`GEMINI_API_KEY`** in `.env`. Get one free from [Google AI Studio](https://aistudio.google.com/) ("Get API key"). Without it the Listen button says audio isn't set up.
+- **`ffmpeg`** on the server's PATH (`brew install ffmpeg`), to join and encode the audio.
+
+The free tier allows about 10 text-to-speech requests a day per model, and the server renders one request per part (about 6 minutes of audio each), so a 30 minute episode uses about 5 of them. Prices on a paid key are cents per episode, but they rise on January 1, 2027. If the day's quota runs out, the job waits and retries instead of failing.
 
 ## How it fits together
 

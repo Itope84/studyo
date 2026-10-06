@@ -3,6 +3,13 @@ import { join } from 'node:path';
 import type { AnswerSet, CliId, JobKind, QuestionSet, Settings, Topic } from '@studyo/api';
 import { courseIdOf, isCourseScope } from '@studyo/api';
 import type { AdapterEvent, CliAdapter, RunRequest } from '../adapters/types.ts';
+import {
+  type AudioParams,
+  audioFor,
+  finalizeAudio,
+  newAudioPaths,
+  readScriptFile,
+} from '../audio.ts';
 import type { ChatStore } from '../chat.ts';
 import { type CondenseParams, finalizeCondense, guardManifest } from '../condense.ts';
 import type { Courses } from '../courses.ts';
@@ -11,6 +18,8 @@ import type { Library } from '../library.ts';
 import { renderTopic } from '../render.ts';
 import { parseJsonObject, type Study } from '../study.ts';
 import { conflict, nowIso } from '../util.ts';
+import type { WaitInfo } from '../voice/engine.ts';
+import { parseScript, renderScript, type Voice } from '../voice/index.ts';
 import { chatContext } from './chat-context.ts';
 import {
   answersPrompt,
@@ -26,6 +35,7 @@ const TIME_LIMIT_MIN: Record<JobKind, number> = {
   enrich: 45,
   'enrich-deep': 90,
   condense: 30,
+  audio: 30,
   answer: 20,
   'course-outline': 40,
   quiz: 12,
@@ -41,6 +51,7 @@ export interface RunnerDeps {
   chat: ChatStore;
   courses: Courses;
   study: Study;
+  voice: Voice;
   adapters: Record<CliId, CliAdapter>;
   settings: () => Settings;
   notify?: (job: JobRecord, topic: Topic | null) => void;
@@ -427,6 +438,9 @@ export class Runner {
       return this.fail(job, `${adapter.label} stopped: ${why}`);
     }
 
+    // Audio: the skill wrote a script; the server speaks it.
+    if (job.kind === 'audio') return this.finishAudio(job, controller);
+
     // Course outline: the skill wrote course.json; the server makes the chapter folders.
     if (courseId && job.kind === 'course-outline') {
       const m = await this.d.courses.readManifest(courseId);
@@ -474,8 +488,14 @@ export class Runner {
     }
     let resources = after.resources;
     if (job.kind === 'condense' && job.params?.output_path) {
-      await finalizeCondense(library, job.topic_id, job.params as unknown as CondenseParams);
+      const made = await finalizeCondense(
+        library,
+        job.topic_id,
+        job.params as unknown as CondenseParams,
+      );
       resources = (await library.readTopic(job.topic_id, { persist: false })).resources;
+      // "Also make audio": queue it now that the doc exists. It runs next, in the same lane.
+      if (made && job.params.audio) this.queueAudioAfterCondense(job, made, resources);
     }
     const problems = renderTopic(library, job.topic_id, resources);
     for (const p of problems) store.log(job.id, 'system', `Render problem: ${p}`);
@@ -487,6 +507,101 @@ export class Runner {
     });
     this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
     this.d.notify?.(done, after);
+  }
+
+  /** A condense job asked for audio: queue it for the doc that was just written, replacing the old doc's audio. */
+  private queueAudioAfterCondense(
+    job: JobRecord,
+    doc: { id: string; path: string },
+    resources: Topic['resources'],
+  ) {
+    const topicDir = this.d.library.topicDir(job.topic_id);
+    const docResource = resources.find((r) => r.id === doc.id);
+    if (!docResource) return;
+    const oldDoc = typeof job.params?.replace === 'string' ? job.params.replace : null;
+    const params: AudioParams = {
+      source_id: doc.id,
+      source_path: doc.path,
+      scope: 'all',
+      voices: job.params?.voices === 1 ? 1 : 2,
+      replace: oldDoc ? (audioFor(resources, oldDoc)[0]?.id ?? null) : null,
+      ...newAudioPaths(topicDir, docResource),
+    };
+    this.d.store.create({
+      topic_id: job.topic_id,
+      kind: 'audio',
+      cli: job.cli,
+      params: params as unknown as Record<string, unknown>,
+    });
+    this.d.store.log(job.id, 'progress', 'Queued the audio');
+  }
+
+  /** The script is written: check it, speak it, add the audio to the topic. Waits out quota limits instead of failing. */
+  private async finishAudio(job: JobRecord, controller: AbortController) {
+    const { library, store, voice } = this.d;
+    const p = job.params as unknown as AudioParams;
+    const dir = library.topicDir(job.topic_id);
+    const text = readScriptFile(dir, p.output_path);
+    if (!text) return this.fail(job, 'The run finished without writing a script.');
+    const parsed = parseScript(text, p.voices);
+    if ('error' in parsed) return this.fail(job, `The script could not be used: ${parsed.error}`);
+    for (const f of parsed.fixes.slice(0, 5)) store.log(job.id, 'system', `Script fix: ${f}`);
+    const script = parsed.script;
+    store.log(
+      job.id,
+      'system',
+      `Script: ${script.segments.length} lines, ${script.words} words, ${script.parts.length} parts`,
+    );
+    const why = voice.unavailable();
+    if (why || !voice.ffmpeg) return this.fail(job, `Audio isn't set up: ${why}`, false);
+
+    store.log(job.id, 'progress', 'Recording the audio');
+    store.update(job.id, { activity: 'Recording the audio', step: null });
+    this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+    const cacheDir = join(dir, '_job', 'audio-cache');
+    let result: Awaited<ReturnType<typeof renderScript>>;
+    try {
+      result = await renderScript({
+        script,
+        engine: voice.engine,
+        ffmpeg: voice.ffmpeg,
+        outPath: join(dir, p.audio_path),
+        cacheDir,
+        signal: controller.signal,
+        onProgress: (pr) => {
+          const line = `Recording part ${pr.part} of ${pr.parts}`;
+          store.update(job.id, { activity: line, step: { n: pr.done, of: pr.total } });
+          this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+        },
+        onWait: (w) => {
+          const line = waitMessage(w);
+          store.log(job.id, 'progress', line);
+          store.update(job.id, { activity: line });
+          this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+        },
+      });
+    } catch (e) {
+      if (this.stopped || controller.signal.aborted) return; // cancel() already settled everything
+      return this.fail(job, (e as Error).message, false);
+    }
+    rmSync(cacheDir, { recursive: true, force: true });
+    const made = await finalizeAudio(library, job.topic_id, p, script, result, voice.engine);
+    if (!made)
+      return this.fail(job, 'The audio was made but could not be added to the topic.', false);
+    store.log(
+      job.id,
+      'system',
+      `Audio: ${Math.round(result.duration / 60)} min, ${result.trimmedBursts} noise bursts trimmed`,
+    );
+    store.log(job.id, 'progress', 'Done');
+    const done = store.update(job.id, {
+      status: 'succeeded',
+      finished: nowIso(),
+      activity: 'Done',
+      step: null,
+    });
+    this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
+    this.d.notify?.(done, await library.readTopic(job.topic_id, { persist: false }));
   }
 
   private async fail(job: JobRecord, message: string, settleTopic = true) {
@@ -649,6 +764,17 @@ export class Runner {
   }
 
   publicJob = publicJob;
+}
+
+/** What the learner reads while the audio waits on a limit. */
+function waitMessage(w: WaitInfo): string {
+  const now = new Date();
+  const sameDay = w.until.toDateString() === now.toDateString();
+  const clock = `${String(w.until.getHours()).padStart(2, '0')}:${String(w.until.getMinutes()).padStart(2, '0')}`;
+  const at = sameDay ? clock : `${clock} tomorrow`;
+  if (w.kind === 'daily') return `Daily limit exceeded. Will retry at ${at}.`;
+  if (w.kind === 'busy') return `The voice service is busy. Will retry at ${at}.`;
+  return `Connection problem. Will retry at ${at}.`;
 }
 
 function originLine(origin: { type: string; link?: string; file?: string; name?: string }): string {

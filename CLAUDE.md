@@ -2,7 +2,7 @@
 
 Personal learning pipeline. A home server (this Mac) turns a link, PDF or topic name into a source-grounded study pack by running Claude Code or OpenCode with the skills in `skills/`. One app (Expo: web now, Android later) reads, listens, chats, and downloads packs as PDF for NotebookLM.
 
-Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. Courses, quizzes and take-home have their own brief, `docs/courses-brief.md`. Chat (slice 8) was reworked Oct 4, 2026: the `answer` skill explains, goes past the pack when needed, and chat has web and a write scope of `sources/` only. `README.md` covers running, deploying and Cloudflare Access.
+Read first: `docs/plan.md` (what's built, what's next; tick boxes as work lands), then `docs/decisions-and-backlog.md` and the product brief for product rules. Courses, quizzes and take-home have their own brief, `docs/courses-brief.md`. Chat (slice 8) was reworked Oct 4, 2026: the `answer` skill explains, goes past the pack when needed, and chat has web and a write scope of `sources/` only. Audio (listen to a condensed doc as a two-host conversation) has its own brief, `docs/audio-brief.md`. `README.md` covers running, deploying and Cloudflare Access.
 
 ## Layout
 
@@ -25,6 +25,7 @@ e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e s
 - **Live state:** one SSE stream (`/events`) announces changes; the app always refetches on resume, so nothing depends on the stream staying open (iOS suspends web apps).
 - **Skills write Markdown; the renderer makes HTML.** Never have the AI write HTML. PDFs are printed from that HTML by headless Chromium.
 - **Courses.** `courses/<id>/course.json` plus `index.md`, `sources/`, `chat/`, `quizzes/`. Chapters are ordinary topic folders in `topics/` with a `course` field, made by the server from `course.json` after the outline job. Course-level jobs, chat and quizzes use the scope id `course--<id>` where a topic id goes (`isCourseScope` in `@studyo/api`). Quizzes live in `<topic or course>/quizzes/`, take-home work in `<topic>/assignments/`; the skills write the JSON and the server (`study.ts`) reads and merges it. See `docs/courses-brief.md`.
+- **Audio.** The `narrate` skill turns a condensed doc into a spoken script (`outputs/audio/*.script.json`); the server (`apps/server/src/voice/`) speaks it with Gemini TTS (`GEMINI_API_KEY`, needs ffmpeg), one request per ~10 minutes of speech, cached, and writes `outputs/<name>.m4a` plus `outputs/audio/<name>.audio.json` (the parts, shown as chapters). Audio belongs to no doc: deleting or regenerating a doc leaves its audio unless the learner ticks the box.
 - **Both CLIs, always.** Anything CLI-related goes through the adapter interface. Unattended runs switch off MCP servers.
 - **Files without headers:** media and the Reader load from `/f/<file token>/…` (token derived from the access token).
 - **Cloudflare Access:** app on another hostname signs in via `GET /auth/access` hand-off and sends `cf-access-token`. Same-hostname setups use the web port, which also serves the API under `/api`.

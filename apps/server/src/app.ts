@@ -53,6 +53,13 @@ import { claudeAdapter } from './adapters/claude.ts';
 import { opencodeAdapter } from './adapters/opencode.ts';
 import { replayAdapter } from './adapters/replay.ts';
 import type { CliAdapter } from './adapters/types.ts';
+import {
+  type AudioParams,
+  audioFor,
+  deleteAudio,
+  isGeneratedAudio,
+  newAudioPaths,
+} from './audio.ts';
 import { ChatStore } from './chat.ts';
 import { type CondenseParams, deleteCondensed, newOutputPath } from './condense.ts';
 import { type Config, VERSION } from './config.ts';
@@ -82,6 +89,7 @@ import {
   slugify,
   today,
 } from './util.ts';
+import { createVoice } from './voice/index.ts';
 import { watchLibrary } from './watch.ts';
 
 export interface ServerOptions {
@@ -120,6 +128,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     detected.claude.installed ? 'claude' : 'opencode',
   );
   const push = new Push(db, config.stateDir);
+  const voice = createVoice(config);
   const runner = new Runner({
     library,
     store,
@@ -127,6 +136,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     chat,
     courses,
     study,
+    voice,
     adapters,
     settings: () => settings.get(),
     notify: (job, topic) => void push.notifyJob(job, topic),
@@ -244,6 +254,11 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
       })),
       settings: settings.get(),
       storage: { library_bytes: await librarySize(config.library) },
+      audio: {
+        available: !voice.unavailable(),
+        reason: voice.unavailable(),
+        engine: voice.engine.label,
+      },
     };
     return c.json(info);
   });
@@ -527,8 +542,16 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     const topic = await library.readTopic(id, { persist: false });
     const resource = topic.resources.find((r) => r.id === c.req.param('rid'));
     if (!resource) throw notFound('Document');
-    if (resource.type !== 'condensed') throw badRequest('Only condensed docs can be deleted.');
-    await deleteCondensed(library, id, resource);
+    if (isGeneratedAudio(resource)) {
+      await deleteAudio(library, id, resource);
+    } else if (resource.type === 'condensed') {
+      // Its audio stays unless asked for: the audio is its own thing, and costs real time to make again.
+      if (c.req.query('audio') === 'true')
+        for (const a of audioFor(topic.resources, resource.id)) await deleteAudio(library, id, a);
+      await deleteCondensed(library, id, resource);
+    } else {
+      throw badRequest('Only condensed docs and audio made here can be deleted.');
+    }
     bus.emit('topic.updated', { topic_id: id });
     return c.body(null, 204);
   });
@@ -638,7 +661,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     const id = c.req.param('id');
     const topic = await library.readTopic(id, { persist: false });
     const body = await json<CreateJob>(c);
-    if (!['enrich', 'enrich-deep', 'condense'].includes(body.kind))
+    if (!['enrich', 'enrich-deep', 'condense', 'audio'].includes(body.kind))
       throw badRequest('Unknown job kind.');
     if (store.activeWork(id))
       throw conflict('This topic already has a job running or waiting for you.');
@@ -671,6 +694,33 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
         output_path: newOutputPath(library.topicDir(id), depth, scope),
       };
       Object.assign(params, condense);
+    }
+    if (body.kind === 'condense' && body.audio) {
+      const why = voice.unavailable();
+      if (why) throw conflict(`Audio isn't set up: ${why}`);
+      params.audio = true;
+      params.voices = body.voices === 1 ? 1 : 2;
+    }
+    if (body.kind === 'audio') {
+      const doc = topic.resources.find((r) => r.id === body.source);
+      if (!doc || doc.type !== 'condensed')
+        throw badRequest('Pick a condensed doc to turn into audio.');
+      const why = voice.unavailable();
+      if (why) throw conflict(`Audio isn't set up: ${why}`);
+      if (body.replace) {
+        const old = topic.resources.find((r) => r.id === body.replace);
+        if (!old || !isGeneratedAudio(old)) throw badRequest('That audio cannot be replaced.');
+      }
+      const rawScope = body.scope ?? 'all';
+      const audio: AudioParams = {
+        source_id: doc.id,
+        source_path: doc.path,
+        scope: Array.isArray(rawScope) && rawScope.length === 0 ? 'all' : rawScope,
+        voices: body.voices === 1 ? 1 : 2,
+        replace: body.replace ?? null,
+        ...newAudioPaths(library.topicDir(id), doc),
+      };
+      Object.assign(params, audio);
     }
     if (body.kind === 'enrich-deep' && body.focus) params.focus = body.focus;
     return c.json(publicJob(enqueue(id, body.kind, params)), 202);
@@ -712,6 +762,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
 
   const BUSY: Partial<Record<JobKind, string>> = {
     condense: 'Writing a condensed doc…',
+    audio: 'Making audio…',
     quiz: 'Writing a quiz…',
     assignment: 'Writing a take-home…',
     'assignment-review': 'Reviewing your submission…',

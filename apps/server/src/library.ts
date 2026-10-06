@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import type {
@@ -161,7 +161,9 @@ export class Library {
         url: ledger.get(r.id) ?? ledger.get(r.path) ?? null,
         description: info?.description ?? null,
         read_minutes: info ? Math.max(1, Math.round(info.words / WORDS_PER_MINUTE)) : null,
-        chapters: isMedia ? await mediaChapters(join(dir, r.path)) : null,
+        chapters: isMedia
+          ? ((await mediaChapters(join(dir, r.path))) ?? partChapters(dir, r.path))
+          : null,
       });
     }
     const packInfo = resources.find((r) => r.type === 'pack')?.description ?? null;
@@ -298,6 +300,21 @@ async function findCover(dir: string): Promise<string | null> {
     if (files[0]) return `${sub}/${files[0]}`;
   }
   return null;
+}
+
+/** Parts of audio the app made: the notes file next to its script lists where each part starts. */
+function partChapters(dir: string, path: string): { title: string; start: number }[] | null {
+  const meta = join(dir, 'outputs', 'audio', `${basename(path, extname(path))}.audio.json`);
+  try {
+    const parts = (JSON.parse(readFileSync(meta, 'utf8')) as { parts?: unknown }).parts;
+    if (!Array.isArray(parts) || !parts.length) return null;
+    return parts.map((p: { title?: string; start?: number }, i) => ({
+      title: String(p.title ?? `Part ${i + 1}`),
+      start: Number(p.start ?? 0),
+    }));
+  } catch {
+    return null;
+  }
 }
 
 /** Chapter markers inside an audio or video file, cached by modification time. */

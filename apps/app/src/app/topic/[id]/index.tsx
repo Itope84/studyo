@@ -1,11 +1,12 @@
-import type { Progress, Rendered, Resource, Topic } from '@studyo/api';
-import { useQuery } from '@tanstack/react-query';
+import type { Progress, Resource, Topic } from '@studyo/api';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Platform, Pressable, View } from 'react-native';
+import { DeleteAudioSheet, ListenSheet } from '@/components/AudioSheets';
 import { ChapterBanner } from '@/components/ChapterBanner';
+import { CondenseSheet, DeleteDocSheet } from '@/components/DocSheets';
 import { DownloadSheet } from '@/components/DownloadSheet';
-import { Check, Input, Segmented } from '@/components/inputs';
+import { Input } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
 import { Sheet } from '@/components/Sheet';
 import { SwipeRow } from '@/components/SwipeRow';
@@ -29,6 +30,7 @@ import {
   timeAgo,
 } from '@/components/ui';
 import { ApiError, api, fileUrl, type UploadProgress } from '@/lib/api';
+import { audioFor, isGeneratedAudio, voicesLabel } from '@/lib/audio';
 import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
@@ -50,6 +52,9 @@ export default function TopicScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [download, setDownload] = useState<Resource | null>(null);
+  const [listen, setListen] = useState<null | { replace: Resource | null }>(null);
+  const [audioMenu, setAudioMenu] = useState<Resource | null>(null);
+  const [removingAudio, setRemovingAudio] = useState<Resource | null>(null);
   const [uploading, setUploading] = useState<{
     name: string;
     size: number;
@@ -88,6 +93,8 @@ export default function TopicScreen() {
   const media = topic.resources.filter((r) => r.type === 'audio' || r.type === 'video');
   const sources = topic.resources.filter((r) => r.type === 'source');
   const pack = docs.find((r) => r.type === 'pack');
+  const condensed = docs.filter((r) => r.type === 'condensed');
+  const audios = topic.resources.filter(isGeneratedAudio);
   const busyTopic = !!activeJob;
   const offlineReason = online ? null : reason;
 
@@ -269,25 +276,14 @@ export default function TopicScreen() {
               style={{ flex: 1 }}
             />
           </View>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Button
-              kind="secondary"
-              label="Re-enrich"
-              icon="autorenew"
-              onPress={() => setSheet('reenrich')}
-              disabled={!online || busyTopic}
-              style={{ flex: 1 }}
-            />
-            <Button
-              kind="secondary"
-              label="Add file"
-              icon="add"
-              onPress={addFile}
-              busy={!!uploading}
-              disabled={!online}
-              style={{ flex: 1 }}
-            />
-          </View>
+          <Button
+            kind="secondary"
+            label="Upload media"
+            icon="upload-file"
+            onPress={addFile}
+            busy={!!uploading}
+            disabled={!online}
+          />
         </View>
       ) : null}
 
@@ -326,6 +322,8 @@ export default function TopicScreen() {
             progress={progress}
             online={online}
             onDownload={() => setDownload(r)}
+            onRecondense={() => setSheet('reenrich')}
+            busyTopic={busyTopic}
             onRegenerate={() => {
               setRegen(r);
               setSheet('condense');
@@ -337,10 +335,18 @@ export default function TopicScreen() {
 
       <SectionTitle
         right={
-          pack ? undefined : (
+          pack ? (
             <Button
               kind="ghost"
-              label="Add file"
+              label="Make audio"
+              icon="headphones"
+              onPress={() => setListen({ replace: null })}
+              disabled={!online || busyTopic}
+            />
+          ) : (
+            <Button
+              kind="ghost"
+              label="Upload media"
               icon="upload-file"
               onPress={addFile}
               busy={!!uploading}
@@ -353,7 +359,8 @@ export default function TopicScreen() {
       </SectionTitle>
       {media.length === 0 ? (
         <T variant="bodySmall" tone="lead" style={{ paddingVertical: space.sm }}>
-          Make audio or video from the pack in NotebookLM, then add the file here.
+          Listen to a condensed doc as audio, or upload audio and video you made elsewhere, for
+          example in NotebookLM.
         </T>
       ) : (
         <View style={{ gap: space.sm }}>
@@ -364,6 +371,10 @@ export default function TopicScreen() {
               progress={progress}
               onPlay={() => void playMedia(r)}
               online={online}
+              source={
+                r.source_id ? (condensed.find((d) => d.id === r.source_id) ?? null) : undefined
+              }
+              onMenu={isGeneratedAudio(r) ? () => setAudioMenu(r) : undefined}
             />
           ))}
         </View>
@@ -438,8 +449,39 @@ export default function TopicScreen() {
         packId={pack?.id ?? null}
         isCourse={!!topic.course}
         regenerate={regen}
+        audios={audios}
       />
-      <DeleteDocSheet doc={removing} onClose={() => setRemoving(null)} topicId={id} />
+      <DeleteDocSheet
+        doc={removing}
+        onClose={() => setRemoving(null)}
+        topicId={id}
+        audios={audios}
+      />
+      <ListenSheet
+        open={!!listen}
+        onClose={() => setListen(null)}
+        topicId={id}
+        docs={condensed}
+        replace={listen?.replace ?? null}
+        hasPack={!!pack}
+        isCourse={!!topic.course}
+      />
+      <AudioMenu
+        audio={audioMenu}
+        online={online}
+        busyTopic={busyTopic}
+        sourceGone={!!audioMenu && !condensed.some((d) => d.id === audioMenu.source_id)}
+        onClose={() => setAudioMenu(null)}
+        onRegenerate={(a) => {
+          setAudioMenu(null);
+          setListen({ replace: a });
+        }}
+        onDelete={(a) => {
+          setAudioMenu(null);
+          setRemovingAudio(a);
+        }}
+      />
+      <DeleteAudioSheet audio={removingAudio} onClose={() => setRemovingAudio(null)} topicId={id} />
       <ReenrichSheet
         open={sheet === 'reenrich'}
         onClose={() => setSheet(null)}
@@ -514,6 +556,8 @@ function DocRow({
   progress,
   online,
   onDownload,
+  onRecondense,
+  busyTopic,
   onRegenerate,
   onDelete,
 }: {
@@ -522,6 +566,8 @@ function DocRow({
   progress: Progress;
   online: boolean;
   onDownload: () => void;
+  onRecondense: () => void;
+  busyTopic: boolean;
   onRegenerate: () => void;
   onDelete: () => void;
 }) {
@@ -557,22 +603,34 @@ function DocRow({
         </View>
       }
       meta={item?.done ? <Icon name="check-circle" size={18} tone="sage" /> : undefined}
-      trailing={
-        // A pack has one action, so it stays on the row. Condensed docs keep all theirs behind the swipe.
-        r.type === 'pack' ? (
-          <IconButton
-            name="file-download"
-            label={`Download ${r.title}`}
-            onPress={onDownload}
-            disabled={!online}
-          />
-        ) : undefined
-      }
       onPress={() => router.push(`/topic/${topicId}/read/${r.id}`)}
       disabled={!online}
       disabledReason="Needs the server"
     />
   );
+  // Packs and condensed docs both keep their actions behind the swipe, so every document row works the same.
+  if (r.type === 'pack')
+    return (
+      <SwipeRow
+        name={r.title}
+        actions={[
+          {
+            icon: 'file-download',
+            label: `Download ${r.title}`,
+            onPress: onDownload,
+            disabled: !online,
+          },
+          {
+            icon: 'autorenew',
+            label: 'Recondense the pack',
+            onPress: onRecondense,
+            disabled: !online || busyTopic,
+          },
+        ]}
+      >
+        {row}
+      </SwipeRow>
+    );
   if (r.type !== 'condensed') return row;
   return (
     <SwipeRow
@@ -609,11 +667,16 @@ function MediaCard({
   progress,
   onPlay,
   online,
+  source,
+  onMenu,
 }: {
   r: Resource;
   progress: Progress;
   onPlay: () => void;
   online: boolean;
+  /** For audio made from a doc: that doc, or null when it was replaced or deleted. Undefined for uploads. */
+  source?: Resource | null;
+  onMenu?: () => void;
 }) {
   const { c } = useTheme();
   const current = usePlayer((s) => s.track?.resource.id === r.id);
@@ -622,62 +685,91 @@ function MediaCard({
   const duration = item?.duration ?? r.duration ?? 0;
   const fraction = item?.done ? 1 : duration ? (item?.position ?? 0) / duration : 0;
   const marks = progress.bookmarks.filter((b) => b.resource_id === r.id).length;
+  const generated = !!r.source_id;
   const bits = [
     duration ? formatTime(duration) : r.type === 'video' ? 'Video' : 'Audio',
-    r.made_with,
+    generated ? voicesLabel(r.voices) : r.made_with,
     item && !item.done && duration ? `${formatTime(duration - item.position)} left` : null,
     marks ? `${marks} bookmark${marks > 1 ? 's' : ''}` : null,
   ].filter(Boolean);
+  // A button cannot sit inside a button on the web, so the card is a frame with the tappable parts side by side.
   return (
-    <Pressable
-      onPress={onPlay}
-      disabled={!online}
-      accessibilityRole="button"
-      accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${r.title}`}
-      style={({ pressed }) => ({
+    <View
+      style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: space.md,
+        gap: space.sm,
         padding: space.sm + 4,
         borderRadius: radius.lg,
         borderWidth: 1,
         borderColor: current ? c.primary : c.rule,
-        backgroundColor: current ? c.tint : pressed ? c.surface : c.surfaceRaised,
+        backgroundColor: current ? c.tint : c.surfaceRaised,
         opacity: online ? 1 : 0.5,
-      })}
+      }}
     >
-      <View
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: radius.lg,
-          backgroundColor: c.primarySoft,
+      <Pressable
+        onPress={onPlay}
+        disabled={!online}
+        accessibilityRole="button"
+        accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${r.title}`}
+        style={({ pressed }) => ({
+          flex: 1,
+          flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
-        }}
+          gap: space.md,
+          borderRadius: radius.base,
+          backgroundColor: pressed ? c.surface : 'transparent',
+        })}
       >
-        <Icon name={r.type === 'video' ? 'movie' : 'graphic-eq'} size={22} tone="primary" />
-      </View>
-      <View style={{ flex: 1, gap: 4 }}>
-        <T variant="rowTitle" numberOfLines={2}>
-          {r.title}
-        </T>
         <View
-          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: radius.lg,
+            backgroundColor: c.primarySoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          <T variant="meta" tone="lead">
-            {bits.join(' · ')}
-          </T>
-          {item?.done ? <Badge kind="ready" label="Done" /> : null}
+          <Icon name={r.type === 'video' ? 'movie' : 'graphic-eq'} size={22} tone="primary" />
         </View>
-        {item && !item.done ? <ProgressBar value={fraction} /> : null}
-        {!online ? (
-          <T variant="meta" tone="faint">
-            Needs the server
+        <View style={{ flex: 1, gap: 4 }}>
+          <T variant="rowTitle" numberOfLines={2}>
+            {r.title}
           </T>
-        ) : null}
-      </View>
-      <View
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}
+          >
+            <T variant="meta" tone="lead">
+              {bits.join(' · ')}
+            </T>
+            {item?.done ? <Badge kind="ready" label="Done" /> : null}
+          </View>
+          {generated && source === null ? (
+            <T variant="meta" tone="faint">
+              Made from an earlier version of the doc
+            </T>
+          ) : null}
+          {item && !item.done ? <ProgressBar value={fraction} /> : null}
+          {!online ? (
+            <T variant="meta" tone="faint">
+              Needs the server
+            </T>
+          ) : null}
+        </View>
+      </Pressable>
+      {onMenu ? (
+        <IconButton
+          name="more-vert"
+          label={`More for ${r.title}`}
+          onPress={onMenu}
+          disabled={!online}
+        />
+      ) : null}
+      <Pressable
+        onPress={onPlay}
+        disabled={!online}
+        accessible={false}
         style={{
           width: 44,
           height: 44,
@@ -692,8 +784,53 @@ function MediaCard({
           size={26}
           tone={current ? 'onPrimary' : 'ink'}
         />
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
+  );
+}
+
+/** What can be done with audio the app made. */
+function AudioMenu({
+  audio,
+  online,
+  busyTopic,
+  sourceGone,
+  onClose,
+  onRegenerate,
+  onDelete,
+}: {
+  audio: Resource | null;
+  online: boolean;
+  busyTopic: boolean;
+  sourceGone: boolean;
+  onClose: () => void;
+  onRegenerate: (a: Resource) => void;
+  onDelete: (a: Resource) => void;
+}) {
+  const why = !online ? 'Needs the server' : busyTopic ? 'Wait for the current job' : null;
+  return (
+    <Sheet open={!!audio} onClose={onClose} title={audio?.title ?? 'Audio'}>
+      <Row
+        title="Regenerate audio"
+        subtitle={
+          sourceGone
+            ? 'The doc this was made from is gone. Open another doc and tap Listen instead.'
+            : 'Record it again from the same doc. The current audio stays until the new one is ready.'
+        }
+        leading={<Icon name="autorenew" size={20} />}
+        onPress={() => audio && onRegenerate(audio)}
+        disabled={!!why || sourceGone}
+        disabledReason={why ?? undefined}
+      />
+      <Row
+        title="Delete audio"
+        subtitle="The doc stays; you can make the audio again."
+        leading={<Icon name="delete-outline" size={20} tone="danger" />}
+        onPress={() => audio && onDelete(audio)}
+        disabled={!online}
+        disabledReason="Needs the server"
+      />
+    </Sheet>
   );
 }
 
@@ -709,7 +846,7 @@ function ReenrichSheet({
   onDeeper: () => void;
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title="Re-enrich">
+    <Sheet open={open} onClose={onClose} title="Recondense">
       <Row
         title="Go deeper"
         subtitle="Add more sources on one part, with checks against them. Keeps the current pack and builds on it."
@@ -832,191 +969,6 @@ function RenameSheet({
       }
     >
       <Input value={title} onChangeText={setTitle} autoFocus accessibilityLabel="Title" />
-      {error ? <Notice tone="danger" title={error} /> : null}
-    </Sheet>
-  );
-}
-
-/**
- * Choose how deep the doc goes and what it covers. The level questions come next, from the job.
- * A new doc never replaces another; regenerating one does, once the new run succeeds.
- */
-function CondenseSheet({
-  open,
-  onClose,
-  topicId,
-  packId,
-  isCourse,
-  regenerate,
-}: {
-  open: boolean;
-  onClose: () => void;
-  topicId: string;
-  packId: string | null;
-  isCourse: boolean;
-  regenerate: Resource | null;
-}) {
-  const [depth, setDepth] = useState<'default' | 'longer'>('default');
-  const [scope, setScope] = useState<'all' | 'parts'>('all');
-  const [picked, setPicked] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Fill the form each time the sheet opens: from the doc being regenerated, else the course default.
-  const [filledFor, setFilledFor] = useState<string | null>(null);
-  const key = open ? `${regenerate?.id ?? 'new'}` : null;
-  if (key !== filledFor) {
-    setFilledFor(key);
-    if (key) {
-      setDepth(regenerate ? (regenerate.depth ?? 'default') : isCourse ? 'longer' : 'default');
-      const parts = Array.isArray(regenerate?.scope) ? regenerate.scope : [];
-      setScope(parts.length ? 'parts' : 'all');
-      setPicked(parts);
-      setNotes(regenerate?.notes ?? '');
-      setError(null);
-    }
-  }
-  const outline = useQuery<Rendered>({
-    queryKey: keys.rendered(topicId, packId ?? ''),
-    queryFn: () => api.rendered(topicId, packId as string),
-    enabled: open && !!packId && scope === 'parts',
-  });
-  const sections = (outline.data?.headings ?? []).filter((h) => h.depth === 2 || h.depth === 3);
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title={regenerate ? 'Regenerate this doc' : 'Create a condensed doc'}
-      footer={
-        <Button
-          label={regenerate ? 'Regenerate' : 'Start'}
-          icon={regenerate ? 'autorenew' : 'auto-awesome'}
-          busy={busy}
-          disabled={scope === 'parts' && picked.length === 0 && !notes.trim()}
-          onPress={async () => {
-            setBusy(true);
-            setError(null);
-            try {
-              await api.startJob(topicId, {
-                kind: 'condense',
-                depth,
-                scope: scope === 'all' ? 'all' : picked,
-                ...(notes.trim() ? { notes: notes.trim() } : {}),
-                ...(regenerate ? { replace: regenerate.id } : {}),
-              });
-              await queryClient.invalidateQueries({ queryKey: keys.activeJobs });
-              await queryClient.invalidateQueries({ queryKey: keys.topic(topicId) });
-              onClose();
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      }
-    >
-      <T variant="bodySmall" tone="lead" style={{ marginBottom: space.md }}>
-        {regenerate
-          ? 'Writes a fresh version with the settings below. When it finishes it replaces this doc and its reading position.'
-          : 'An easy-to-follow version of the pack, written at your level. It is added next to your other docs and never replaces one. It may ask a quick question about what you already know first.'}
-      </T>
-      <Segmented
-        value={depth}
-        onChange={setDepth}
-        options={[
-          { value: 'default', label: 'Default' },
-          { value: 'longer', label: 'Deep dive' },
-        ]}
-      />
-      <T variant="meta" tone="lead" style={{ marginTop: space.xs, marginBottom: space.md }}>
-        {depth === 'longer'
-          ? 'Every idea shown working, with predict-and-reveal checks. Longer to write and to read.'
-          : 'An overview of the main ideas.'}
-      </T>
-      <Segmented
-        value={scope}
-        onChange={setScope}
-        options={[
-          { value: 'all', label: 'Whole pack' },
-          { value: 'parts', label: 'Selected parts' },
-        ]}
-      />
-      {scope === 'parts' ? (
-        <View style={{ marginTop: space.md }}>
-          {outline.isLoading ? <Loading label="Reading the outline" /> : null}
-          {sections.map((h) => (
-            <View key={h.id} style={{ paddingLeft: h.depth === 3 ? space.lg : 0 }}>
-              <Check
-                checked={picked.includes(h.id)}
-                label={h.text}
-                onToggle={() =>
-                  setPicked((p) => (p.includes(h.id) ? p.filter((x) => x !== h.id) : [...p, h.id]))
-                }
-              />
-            </View>
-          ))}
-          <T variant="meta" tone="lead" style={{ marginTop: space.md, marginBottom: space.xs }}>
-            Anything specific you want covered or stressed? Optional. Without ticking parts it
-            applies to the whole pack.
-          </T>
-          <Input
-            area
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="For example: focus on the worked examples"
-            accessibilityLabel="What to cover or stress"
-          />
-        </View>
-      ) : null}
-      {error ? <Notice tone="danger" title={error} /> : null}
-    </Sheet>
-  );
-}
-
-/** Confirm before removing a condensed doc. */
-function DeleteDocSheet({
-  doc,
-  onClose,
-  topicId,
-}: {
-  doc: Resource | null;
-  onClose: () => void;
-  topicId: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <Sheet
-      open={!!doc}
-      onClose={onClose}
-      title="Delete this doc?"
-      footer={
-        <Button
-          label="Delete"
-          icon="delete-outline"
-          busy={busy}
-          onPress={async () => {
-            if (!doc) return;
-            setBusy(true);
-            setError(null);
-            try {
-              await api.deleteResource(topicId, doc.id);
-              await queryClient.invalidateQueries({ queryKey: keys.topic(topicId) });
-              onClose();
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      }
-    >
-      <T variant="bodySmall" tone="lead">
-        {doc?.title} and your reading position in it will be removed. The study pack and your other
-        docs stay.
-      </T>
       {error ? <Notice tone="danger" title={error} /> : null}
     </Sheet>
   );

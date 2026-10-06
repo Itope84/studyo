@@ -313,3 +313,85 @@ test('make a deep dive next to a condensed doc, regenerate it, delete it', async
     timeout: 15_000,
   });
 });
+
+test('make audio from a condensed doc, regenerate it, delete it', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await connect(page);
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+
+  // Listen and watch offers audio from the topic's docs.
+  await v(page.getByRole('button', { name: 'Make audio' })).click();
+  await expect(v(page.getByText('Two hosts talk through the whole doc'))).toBeVisible();
+  await page.waitForTimeout(500);
+  await shot(page, '40-listen-sheet');
+  const last = (name: string | RegExp) =>
+    page.getByRole('button', { name }).filter({ visible: true }).last();
+  await last('Make audio').click();
+  await expect(v(page.getByText(/^Audio: /))).toBeVisible({ timeout: 45_000 });
+  await shot(page, '41-audio-made');
+
+  // The audio's menu regenerates it (the old one is replaced) and deletes it.
+  await v(page.getByRole('button', { name: /^More for Audio/ })).click();
+  await v(page.getByText('Regenerate audio', { exact: true })).click();
+  await expect(
+    v(page.getByText('The current audio stays until the new one is ready')),
+  ).toBeVisible();
+  await last('Regenerate audio').click();
+  await expect(v(page.getByRole('button', { name: 'Make audio' }))).toBeDisabled();
+  await expect(v(page.getByRole('button', { name: 'Make audio' }))).toBeEnabled({
+    timeout: 45_000,
+  });
+  await expect(page.getByText(/^Audio: /).filter({ visible: true })).toHaveCount(1);
+
+  await v(page.getByRole('button', { name: /^More for Audio/ })).click();
+  await v(page.getByText('Delete audio', { exact: true })).click();
+  await last('Delete').click();
+  await expect(page.getByText(/^Audio: /).filter({ visible: true })).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  expect(errors.filter((e) => /nested|cannot contain/i.test(e))).toEqual([]);
+});
+
+test('the reader keeps Outline, Listen and Ask in view and the rest in one menu', async ({
+  page,
+}) => {
+  await connect(page);
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+  await v(page.getByText('Merkle Tree Certificates in plain words')).click();
+  const header = (name: string | RegExp) => v(page.getByRole('button', { name }));
+  await expect(header('Outline')).toBeVisible({ timeout: 20_000 });
+  await expect(header(/^Listen/)).toBeVisible();
+  await expect(header('Ask about this')).toBeVisible();
+  await expect(header(/^Download/)).toHaveCount(0);
+  await expect(header(/Mark as read/)).toHaveCount(0);
+  await shot(page, '42-reader-header');
+
+  await header('More').click();
+  for (const row of ['Download', 'Mark as read', 'Regenerate', 'Delete'])
+    await expect(v(page.getByText(row, { exact: true }))).toBeVisible();
+  await shot(page, '43-reader-menu');
+
+  // Listen with no audio yet opens the sheet, with this doc fixed.
+  await v(page.getByRole('button', { name: 'Close' })).click();
+  await header(/^Listen/).click();
+  await expect(v(page.getByText('Two hosts talk through the whole doc'))).toBeVisible();
+  await expect(page.getByText('A new condensed doc').filter({ visible: true })).toHaveCount(0);
+});
+
+test('the pack row keeps its actions behind the same swipe as a condensed doc', async ({
+  page,
+}) => {
+  await connect(page);
+  await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
+  await expect(v(page.getByRole('button', { name: /^Show actions for Study pack/ }))).toBeVisible({
+    timeout: 20_000,
+  });
+  await shot(page, '44-pack-row-closed');
+  await v(page.getByRole('button', { name: /^Show actions for Study pack/ })).click();
+  await expect(v(page.getByRole('button', { name: /^Download Study pack/ }))).toBeVisible();
+  await v(page.getByRole('button', { name: 'Recondense the pack' })).click();
+  await expect(v(page.getByText('Rebuild the pack', { exact: true }))).toBeVisible();
+});

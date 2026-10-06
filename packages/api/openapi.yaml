@@ -286,9 +286,17 @@ paths:
       - $ref: '#/components/parameters/ResourceId'
     delete:
       tags: [topics]
-      summary: Delete a condensed doc
-      description: Removes the document, its rendered HTML and PDF, and its reading progress. Only condensed docs can be deleted this way.
+      summary: Delete a condensed doc or a generated audio
+      description: |
+        Removes a condensed doc, its rendered HTML and PDF, and its reading progress. Its audio stays unless `audio=true`
+        is given, which also removes every generated audio made from it. A generated audio (one the app made from a doc)
+        can be deleted too, with its script and listening progress. Packs, uploads and sources cannot be deleted this way.
       operationId: deleteResource
+      parameters:
+        - name: audio
+          in: query
+          description: When deleting a condensed doc, also delete the audio made from it. Default false.
+          schema: { type: boolean, default: false }
       responses:
         '204': { description: Deleted }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -489,7 +497,7 @@ paths:
       - $ref: '#/components/parameters/TopicId'
     post:
       tags: [jobs]
-      summary: Start an enrich, deep enrich or condense job
+      summary: Start an enrich, deep enrich, condense or audio job
       operationId: createJob
       requestBody:
         required: true
@@ -1302,10 +1310,20 @@ components:
 
     ServerInfo:
       type: object
-      required: [version, file_token, clis, settings, storage]
+      required: [version, file_token, clis, settings, storage, audio]
       properties:
         version: { type: string }
         file_token: { type: string }
+        audio:
+          type: object
+          description: Whether the server can turn a script into audio (a voice key and ffmpeg).
+          required: [available, reason]
+          properties:
+            available: { type: boolean }
+            reason:
+              type: [string, 'null']
+              description: When not available, one plain sentence on what is missing.
+            engine: { type: [string, 'null'], description: 'The voice engine, for example Gemini' }
         clis:
           type: array
           items: { $ref: '#/components/schemas/CliInfo' }
@@ -1401,6 +1419,13 @@ components:
         notes:
           type: [string, 'null']
           description: For condensed docs made by the app, the learner's request that steered the run.
+        source_id:
+          type: [string, 'null']
+          description: For audio made by the app, the id of the condensed doc it was made from. The doc may have been replaced or deleted since.
+        voices:
+          type: [integer, 'null']
+          enum: [1, 2, null]
+          description: For audio made by the app, one narrator or two hosts.
 
     Learning:
       type: object
@@ -1644,7 +1669,7 @@ components:
 
     JobKind:
       type: string
-      enum: [enrich, enrich-deep, condense, answer, course-outline, quiz, quiz-grade, assignment, assignment-review]
+      enum: [enrich, enrich-deep, condense, audio, answer, course-outline, quiz, quiz-grade, assignment, assignment-review]
 
     JobStatus:
       type: string
@@ -1734,9 +1759,9 @@ components:
       properties:
         kind:
           type: string
-          enum: [enrich, enrich-deep, condense]
+          enum: [enrich, enrich-deep, condense, audio]
         scope:
-          description: For condense, `all` or a list of pack section ids
+          description: For condense, `all` or a list of pack section ids. For audio, `all` or a list of the doc's section headings.
           oneOf:
             - type: string
               const: all
@@ -1750,7 +1775,17 @@ components:
           description: 'For condense, what the learner wants covered or stressed. Steers focus only; facts still come from the pack.'
         replace:
           type: string
-          description: 'For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything.'
+          description: 'For condense, the id of a condensed doc this run replaces once it succeeds. Without it a condense job never removes anything. For audio, the id of an audio this run replaces once it succeeds.'
+        source:
+          type: string
+          description: 'For audio, the id of the condensed doc to turn into audio.'
+        voices:
+          type: integer
+          enum: [1, 2]
+          description: 'For audio (and for condense with `audio`), one narrator or a host and a co-host. Default 2.'
+        audio:
+          type: boolean
+          description: 'For condense, also make audio from the doc once it is written. With `replace`, the audio made from the replaced doc is replaced too. Default false.'
 
     QuestionSet:
       type: object
