@@ -20,6 +20,7 @@ import { Button, Notice } from '@/components/ui';
 import { finishAccessSignIn, signInWithAccess } from '@/lib/access';
 import { useChrome } from '@/lib/chrome';
 import { events, useLive, watchForeground } from '@/lib/live';
+import { registerServiceWorker } from '@/lib/offline';
 import { usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
 import { ThemeProvider, useTheme } from '@/theme';
@@ -34,6 +35,7 @@ function Shell() {
 
   // Back from a Cloudflare Access sign-in (web): the token is in the address bar.
   useEffect(() => {
+    registerServiceWorker();
     if (finishAccessSignIn()) {
       useLive.getState().set({ accessExpired: false });
       if (usePrefs.getState().pendingConnection?.cfToken) router.replace('/connect');

@@ -23,6 +23,7 @@ import {
 import { ApiError, api, fileUrl } from '@/lib/api';
 import { audioFor, isGeneratedAudio } from '@/lib/audio';
 import { useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { useOffline } from '@/lib/offline';
 import { play, topicQueue } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
 import { space, useTheme } from '@/theme';
@@ -38,6 +39,7 @@ export default function Reader() {
   const topic = useTopic(id);
   const server = useServerInfo();
   const { online } = useOnline();
+  const savedOffline = useOffline((s) => !!s.topics[id]);
   const job = useTopicJob(id);
   const frame = useRef<DocFrameHandle>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -199,7 +201,7 @@ export default function Reader() {
                         : 'Listen: make audio from this doc'
                   }
                   onPress={() => void onListen()}
-                  disabled={!online}
+                  disabled={!online && !(docAudio && savedOffline)}
                 />
               ) : null}
               <IconButton

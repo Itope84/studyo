@@ -8,6 +8,7 @@ import { CondenseSheet, DeleteDocSheet } from '@/components/DocSheets';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Input } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
+import { OfflineCard } from '@/components/OfflineCard';
 import { Sheet } from '@/components/Sheet';
 import { SwipeRow } from '@/components/SwipeRow';
 import { TopicBadge } from '@/components/status';
@@ -32,6 +33,7 @@ import {
 import { ApiError, api, fileUrl, type UploadProgress } from '@/lib/api';
 import { audioFor, isGeneratedAudio, voicesLabel } from '@/lib/audio';
 import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { useOffline } from '@/lib/offline';
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
 import { MEDIA_TYPES, pickFile } from '@/lib/upload';
@@ -44,6 +46,7 @@ export default function TopicScreen() {
   const activeJobs = useActiveJobs();
   const { online, reason } = useOnline();
   const server = useServerInfo();
+  const offlineTopics = useOffline((s) => s.topics);
   const [regen, setRegen] = useState<Resource | null>(null);
   const [removing, setRemoving] = useState<Resource | null>(null);
   const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more' | 'reenrich'>(
@@ -97,6 +100,7 @@ export default function TopicScreen() {
   const audios = topic.resources.filter(isGeneratedAudio);
   const busyTopic = !!activeJob;
   const offlineReason = online ? null : reason;
+  const savedOffline = !!offlineTopics[id];
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
     setBusy(label);
@@ -236,7 +240,11 @@ export default function TopicScreen() {
           tone="warning"
           icon="cloud-off"
           title="Server offline"
-          body="Reading and listening need the server until downloads arrive in the Android app."
+          body={
+            savedOffline
+              ? 'Showing the copy saved for offline use. Reading and listening work; making things waits for the server.'
+              : 'Showing what you last opened. Docs and audio you haven’t opened won’t load until the server is back.'
+          }
         />
       ) : null}
 
@@ -286,6 +294,10 @@ export default function TopicScreen() {
           />
         </View>
       ) : null}
+
+      <View style={{ marginTop: space.md }}>
+        <OfflineCard detail={q.data} online={online} />
+      </View>
 
       {topic.learning?.goal || topic.learning?.gaps?.length ? (
         <LearningBlock topic={topic} />
@@ -371,6 +383,7 @@ export default function TopicScreen() {
               progress={progress}
               onPlay={() => void playMedia(r)}
               online={online}
+              playable={online || (savedOffline && r.type === 'audio')}
               source={
                 r.source_id ? (condensed.find((d) => d.id === r.source_id) ?? null) : undefined
               }
@@ -604,8 +617,6 @@ function DocRow({
       }
       meta={item?.done ? <Icon name="check-circle" size={18} tone="sage" /> : undefined}
       onPress={() => router.push(`/topic/${topicId}/read/${r.id}`)}
-      disabled={!online}
-      disabledReason="Needs the server"
     />
   );
   // Packs and condensed docs both keep their actions behind the swipe, so every document row works the same.
@@ -667,6 +678,7 @@ function MediaCard({
   progress,
   onPlay,
   online,
+  playable,
   source,
   onMenu,
 }: {
@@ -674,6 +686,8 @@ function MediaCard({
   progress: Progress;
   onPlay: () => void;
   online: boolean;
+  /** Online, or audio saved for offline use. */
+  playable: boolean;
   /** For audio made from a doc: that doc, or null when it was replaced or deleted. Undefined for uploads. */
   source?: Resource | null;
   onMenu?: () => void;
@@ -704,12 +718,12 @@ function MediaCard({
         borderWidth: 1,
         borderColor: current ? c.primary : c.rule,
         backgroundColor: current ? c.tint : c.surfaceRaised,
-        opacity: online ? 1 : 0.5,
+        opacity: playable ? 1 : 0.5,
       }}
     >
       <Pressable
         onPress={onPlay}
-        disabled={!online}
+        disabled={!playable}
         accessibilityRole="button"
         accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${r.title}`}
         style={({ pressed }) => ({
@@ -751,7 +765,7 @@ function MediaCard({
             </T>
           ) : null}
           {item && !item.done ? <ProgressBar value={fraction} /> : null}
-          {!online ? (
+          {!playable ? (
             <T variant="meta" tone="faint">
               Needs the server
             </T>
@@ -768,7 +782,7 @@ function MediaCard({
       ) : null}
       <Pressable
         onPress={onPlay}
-        disabled={!online}
+        disabled={!playable}
         accessible={false}
         style={{
           width: 44,

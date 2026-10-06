@@ -1,6 +1,6 @@
 import type { Job } from '@studyo/api';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, api } from './api';
+import { ApiError, api, fromCache } from './api';
 import { useLive } from './live';
 import { usePrefs } from './prefs';
 import { keys } from './query';
@@ -9,7 +9,9 @@ import { keys } from './query';
 async function track<T>(p: Promise<T>): Promise<T> {
   try {
     const v = await p;
-    if (useLive.getState().reachable !== true) useLive.getState().set({ reachable: true });
+    // A saved copy from the service worker: good data, but the server didn't answer.
+    const reachable = !(v && typeof v === 'object' && fromCache.has(v));
+    if (useLive.getState().reachable !== reachable) useLive.getState().set({ reachable });
     return v;
   } catch (e) {
     if (e instanceof ApiError && e.offline) useLive.getState().set({ reachable: false });

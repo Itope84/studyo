@@ -2,7 +2,8 @@ import { courseIdOf, isCourseScope, type StudyoEvent } from '@studyo/api';
 import { fetch as expoFetch } from 'expo/fetch';
 import { AppState, Platform } from 'react-native';
 import { create } from 'zustand';
-import { authHeaders } from './api';
+import { authHeaders, sendProgress } from './api';
+import { flushOutbox } from './outbox';
 import { usePrefs } from './prefs';
 import {
   appendChatDelta,
@@ -181,6 +182,15 @@ class EventStream {
 }
 
 export const events = new EventStream();
+
+// Progress saved while offline goes out as soon as the server answers again.
+useLive.subscribe((s, prev) => {
+  if (s.reachable !== true || prev.reachable === true) return;
+  void flushOutbox(sendProgress).then((topics) => {
+    for (const id of topics) void queryClient.invalidateQueries({ queryKey: keys.topic(id) });
+    if (topics.length) void queryClient.invalidateQueries({ queryKey: keys.topics });
+  });
+});
 
 /** Wire the resume procedure to the platform's foreground signal. Returns an unsubscribe. */
 export function watchForeground(): () => void {

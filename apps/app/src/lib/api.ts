@@ -42,6 +42,7 @@ import type {
   UpdateCourse,
   UpdateTopic,
 } from '@studyo/api';
+import { useOutbox, withQueued } from './outbox';
 import { type Connection, usePrefs } from './prefs';
 
 export class ApiError extends Error {
@@ -66,6 +67,12 @@ export function authHeaders(conn: Connection): Record<string, string> {
   if (conn.cfToken) h['CF-Access-Token'] = conn.cfToken;
   return h;
 }
+
+/**
+ * Answers the service worker served from its saved copy because the server didn't answer
+ * (`x-studyo-offline`, see public/sw.js). The data is good to show; the server is out of reach.
+ */
+export const fromCache = new WeakSet<object>();
 
 function conn(): Connection {
   const c = usePrefs.getState().connection;
@@ -117,10 +124,14 @@ async function request<T>(
   if (json === null && text.includes('cloudflareaccess')) throw accessError(c);
   if (json === null && text)
     throw new ApiError(res.status, 'bad_response', 'The server sent something unexpected.');
+  if (json && typeof json === 'object' && res.headers.get('x-studyo-offline')) fromCache.add(json);
   return json as T;
 }
 
 const enc = encodeURIComponent;
+
+export const sendProgress = (id: string, u: ProgressUpdate) =>
+  request<Progress>('PUT', `/topics/${enc(id)}/progress`, u);
 
 export const api = {
   health: (c: Connection) =>
@@ -131,7 +142,12 @@ export const api = {
 
   topics: (includeArchived = false) =>
     request<TopicList>('GET', `/topics${includeArchived ? '?include_archived=true' : ''}`),
-  topic: (id: string) => request<TopicDetail>('GET', `/topics/${enc(id)}`),
+  topic: async (id: string) => {
+    const d = await request<TopicDetail>('GET', `/topics/${enc(id)}`);
+    const out = { ...d, progress: withQueued(id, d.progress) };
+    if (fromCache.has(d)) fromCache.add(out);
+    return out;
+  },
   createTopic: (body: CreateTopic) => request<TopicWithJob>('POST', '/topics', body),
   createTopicFromPdf: (
     form: FormData,
@@ -160,9 +176,17 @@ export const api = {
     request<Pdf>('GET', `/topics/${enc(id)}/resources/${enc(rid)}/pdf`),
   markRead: (id: string) => request<Profile>('POST', `/topics/${enc(id)}/mark-read`),
 
-  progress: (id: string) => request<Progress>('GET', `/topics/${enc(id)}/progress`),
-  saveProgress: (id: string, u: ProgressUpdate) =>
-    request<Progress>('PUT', `/topics/${enc(id)}/progress`, u),
+  progress: async (id: string) =>
+    withQueued(id, await request<Progress>('GET', `/topics/${enc(id)}/progress`)),
+  /** Offline, the update waits in the outbox (src/lib/outbox.ts) and the call still fails. */
+  saveProgress: async (id: string, u: ProgressUpdate) => {
+    try {
+      return await sendProgress(id, u);
+    } catch (e) {
+      if (e instanceof ApiError && (e.offline || e.status >= 500)) useOutbox.getState().add(id, u);
+      throw e;
+    }
+  },
 
   startJob: (id: string, body: CreateJob) => request<Job>('POST', `/topics/${enc(id)}/jobs`, body),
   jobs: (q: { active?: boolean; topic_id?: string; limit?: number } = {}) => {

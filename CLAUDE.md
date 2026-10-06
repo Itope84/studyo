@@ -27,6 +27,7 @@ e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e s
 - **Courses.** `courses/<id>/course.json` plus `index.md`, `sources/`, `chat/`, `quizzes/`. Chapters are ordinary topic folders in `topics/` with a `course` field, made by the server from `course.json` after the outline job. Course-level jobs, chat and quizzes use the scope id `course--<id>` where a topic id goes (`isCourseScope` in `@studyo/api`). Quizzes live in `<topic or course>/quizzes/`, take-home work in `<topic>/assignments/`; the skills write the JSON and the server (`study.ts`) reads and merges it. See `docs/courses-brief.md`.
 - **Audio.** The `narrate` skill turns a condensed doc into a spoken script (`outputs/audio/*.script.json`); the server (`apps/server/src/voice/`) speaks it with Gemini TTS (`GEMINI_API_KEY`, needs ffmpeg), one request per ~10 minutes of speech, cached, and writes `outputs/<name>.m4a` plus `outputs/audio/<name>.audio.json` (the parts, shown as chapters). Audio belongs to no doc: deleting or regenerating a doc leaves its audio unless the learner ticks the box.
 - **Both CLIs, always.** Anything CLI-related goes through the adapter interface. Unattended runs switch off MCP servers.
+- **Offline (web).** `apps/app/public/sw.js` keeps the app (stamped per build by `scripts/build-sw.mjs`), every API answer (network first), and topics saved with "Make available offline" (`src/lib/offline.ts`). Progress made offline waits in `src/lib/outbox.ts`. See `docs/offline-brief.md`.
 - **Files without headers:** media and the Reader load from `/f/<file token>/…` (token derived from the access token).
 - **Cloudflare Access:** app on another hostname signs in via `GET /auth/access` hand-off and sends `cf-access-token`. Same-hostname setups use the web port, which also serves the API under `/api`.
 
@@ -46,6 +47,7 @@ pnpm demo             # replay server on a copy of fixtures (no tokens); set STU
 pnpm dev:app          # Expo web on :8081
 pnpm test             # renderer + server tests (replay adapter, never real CLIs)
 pnpm e2e              # Playwright: starts its own replay server (:8790), fake Access (:8792), Expo (:8082)
+pnpm e2e:offline      # offline tests on a production build (service worker): API :8793, web :8794
 pnpm typecheck && pnpm lint
 pnpm deploy:web       # export the web app and deploy the Worker
 ```

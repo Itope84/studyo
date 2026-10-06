@@ -4,6 +4,8 @@ const APP_PORT = 8082;
 
 export default defineConfig({
   testDir: 'e2e',
+  // Needs a production build: `pnpm e2e:offline` (playwright.offline.config.ts).
+  testIgnore: 'offline.spec.ts',
   timeout: 90_000,
   workers: 1,
   reporter: [['list']],
