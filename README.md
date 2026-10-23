@@ -11,7 +11,26 @@ pnpm install
 pnpm start          # builds the web app, then serves the API on :8787 and the app on :8788
 ```
 
-The server prints an access token and a **setup link**. Open the link on this Mac or on your phone (same Wi-Fi or Tailscale) and the app connects straight away. Your library is `library/` in this repo. The token is kept in `library/_studyo/token`.
+On a fresh install the server creates the first user (the owner) and prints their access token and a **setup link** once. Open the link on this Mac or on your phone (same Wi-Fi or Tailscale) and the app connects straight away. Each person has their own library at `library/users/<id>/`; only a hash of each token is stored, so see **Users** below to get a new link.
+
+### Users
+
+Studyo can serve a few people from one Mac. Accounts are invite-only and made in the terminal:
+
+```bash
+pnpm users add alice --name "Alice"   # prints a one-time invite link
+pnpm users list                        # last seen, jobs in 7 days (ok/failed), active, size
+pnpm users jobs alice --failed         # their recent jobs
+pnpm users reset alice                 # new token; the old one stops working
+pnpm users disable alice               # turn an account off (enable turns it back on)
+pnpm users backup alice                # or --all; tar.gz in ~/Backups/studyo (STUDYO_BACKUP_DIR)
+```
+
+The owner (first user) is the only one who can change the AI settings. New users start with the owner's CLI and model. At most `STUDYO_MAX_WORK` (2) work jobs and `STUDYO_MAX_CHAT` (3) chat replies run at once across everyone; the rest wait their turn. `tail -f library/_studyo/server.log` shows `[user] job … status` lines.
+
+**Restore** a user: stop the server, move `library/users/<id>` aside, `tar -xzf <backup> -C library/users`, start the server.
+
+**Upgrading a single-user library:** stop the server, then `pnpm users migrate --id <you>`. It backs the library up, moves it to `library/users/<id>/` and keeps your old token as your login.
 
 ### Courses, quizzes and take-home
 
@@ -79,9 +98,12 @@ STUDYO_ORIGINS=https://studyo.pages.dev   # your web app's origin(s); also used 
 
 | Env var | Default | What it does |
 | --- | --- | --- |
-| `STUDYO_LIBRARY` | `./library` | The library folder (source of truth) |
+| `STUDYO_ROOT` | `./library` | Holds `users/<id>/` (each person's library, the source of truth) and the server-wide `_studyo/` |
+| `STUDYO_MAX_WORK` / `STUDYO_MAX_CHAT` | 2 / 3 | Most AI runs at once across all users |
+| `STUDYO_BACKUP_DIR` | `~/Backups/studyo` | Where `pnpm users backup` writes |
+| `STUDYO_INVITE_APP` / `STUDYO_INVITE_SERVER` | studyo.ilesan.me / studyo-api.ilesan.me | Where invite links point |
 | `STUDYO_PORT` / `STUDYO_WEB_PORT` | 8787 / 8788 | API and web app ports |
-| `STUDYO_TOKEN` | generated once | Access token |
+| `STUDYO_TOKEN` | generated once | Token for the first user, only when the server has no users yet |
 | `STUDYO_ORIGINS` | `*` | Allowed browser origins (comma separated); also where Access sign-ins may return |
 | `STUDYO_APP_URLS` | unset | Extra return addresses for Access sign-ins |
 | `STUDYO_REPLAY` | unset | Replay scripts instead of real CLIs |

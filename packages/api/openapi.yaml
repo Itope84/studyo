@@ -123,6 +123,11 @@ paths:
               schema: { $ref: '#/components/schemas/Settings' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Only the server owner can change these settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /topics:
     get:
@@ -1310,9 +1315,17 @@ components:
 
     ServerInfo:
       type: object
-      required: [version, file_token, clis, settings, storage, audio]
+      required: [version, user, file_token, clis, settings, storage, audio]
       properties:
         version: { type: string }
+        user:
+          type: object
+          description: Who this token belongs to.
+          required: [id, name, admin]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            admin: { type: boolean, description: The server owner; only they change the AI settings. }
         file_token: { type: string }
         audio:
           type: object
@@ -1567,6 +1580,9 @@ components:
             name: { type: string, minLength: 2 }
         title: { type: string }
         enrich: { type: boolean, default: true }
+        explainer:
+          type: boolean
+          description: With `enrich`, write the first explainer (a whole-topic condensed doc) as soon as the reference is built.
 
     UpdateTopic:
       type: object
@@ -1783,6 +1799,9 @@ components:
           type: integer
           enum: [1, 2]
           description: 'For audio (and for condense with `audio`), one narrator or a host and a co-host. Default 2.'
+        explainer:
+          type: boolean
+          description: 'For enrich, write the first explainer (a whole-topic condensed doc, standard depth) as soon as the reference is built. Only the first build sends it. Default false.'
         audio:
           type: boolean
           description: 'For condense, also make audio from the doc once it is written. With `replace`, the audio made from the replaced doc is replaced too. Default false.'
@@ -1918,6 +1937,7 @@ components:
           properties:
             title: { type: string }
             enrich: { type: boolean, default: true }
+            explainer: { type: boolean, description: 'With `enrich`, also write the first explainer.' }
 
     KnowsEntry:
       type: object

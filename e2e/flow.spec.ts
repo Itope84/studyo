@@ -26,6 +26,8 @@ test('add a link, answer the level question, read the new pack', async ({ page }
   await v(page.getByLabel('Link')).fill('https://example.com/merkle-trees-explained');
   await shot(page, '02-add');
   await v(page.getByRole('button', { name: 'Add and build' })).click();
+  await v(page.getByRole('checkbox', { name: /Also write the explainer/ })).click();
+  await v(page.getByRole('button', { name: 'Build study pack only' })).click();
 
   // The topic page shows the job, then the question.
   await expect(v(page.getByRole('heading', { name: 'Merkle trees explained' }))).toBeVisible();
@@ -44,7 +46,7 @@ test('add a link, answer the level question, read the new pack', async ({ page }
     timeout: 30_000,
   });
   await shot(page, '05-topic-ready');
-  await v(page.getByRole('button', { name: /Study pack This pack/ })).click();
+  await v(page.getByRole('button', { name: /Full notes This pack/ })).click();
   const frame = v(page.locator('iframe[title="Document"]')).contentFrame();
   await expect(frame.getByRole('heading', { name: 'Demo study pack' })).toBeVisible({
     timeout: 20_000,
@@ -59,7 +61,7 @@ test('ask in chat and get a cited answer with an enrich offer', async ({ page })
   await v(page.getByLabel('Your question')).fill('What replaces the certificate chain?');
   await v(page.getByRole('button', { name: 'Send' })).click();
   await expect(v(page.getByText(/replace a chain of signatures/))).toBeVisible({ timeout: 20_000 });
-  await expect(v(page.getByText('Add this to the pack?'))).toBeVisible({
+  await expect(v(page.getByText('Add this to the reference?'))).toBeVisible({
     timeout: 20_000,
   });
   await expect(v(page.getByText('Quiz yourself on this?'))).toBeVisible();
@@ -102,6 +104,7 @@ test('closing the app mid-job and reopening it shows the waiting question', asyn
   await v(first.getByRole('button', { name: 'Topic name' })).click();
   await v(first.getByLabel('Topic')).fill('Bloom filters');
   await v(first.getByRole('button', { name: 'Add and build' })).click();
+  await v(first.getByRole('button', { name: 'Build study pack and explainer' })).click();
   await expect(v(first.getByRole('heading', { name: 'Bloom filters' }))).toBeVisible();
   // Close the tab while the job is still running, as iOS does to a backgrounded web app.
   await first.close();
@@ -136,7 +139,7 @@ test('download a document as PDF for NotebookLM', async ({ page }) => {
 test('the tab bar reaches Activity, which shows a waiting question', async ({ page }) => {
   await connect(page);
   await v(page.getByRole('tab', { name: /Activity/ })).click();
-  await expect(v(page.getByText('Packs and docs'))).toBeVisible();
+  await expect(v(page.getByText('References and explainers'))).toBeVisible();
   await v(page.getByRole('tab', { name: /Library/ })).click();
   await expect(v(page.getByRole('button', { name: 'Add topic' }))).toBeVisible();
 });
@@ -223,7 +226,9 @@ test('plan a course, approve the outline, build a chapter, quiz and take-home', 
   await v(page.getByRole('button', { name: /^Reliable systems, planned/ })).click();
   await expect(v(page.getByText('Chapter 1 of 3'))).toBeVisible();
   await shot(page, '24-chapter-planned');
-  await v(page.getByRole('button', { name: 'Build the study pack' })).click();
+  await v(page.getByRole('button', { name: 'Build study pack' })).click();
+  await v(page.getByRole('checkbox', { name: /Also write the explainer/ })).click();
+  await v(page.getByRole('button', { name: 'Build study pack only' })).click();
   await expect(v(page.getByText('Waiting for your answer'))).toBeVisible({ timeout: 20_000 });
   await v(page.getByRole('button', { name: 'Answer' })).click();
   await v(page.getByRole('button', { name: 'Send answers' })).click();
@@ -281,15 +286,15 @@ test('make a deep dive next to a condensed doc, regenerate it, delete it', async
   await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
 
   // A new doc is added beside the existing ones.
-  await v(page.getByRole('button', { name: 'Condensed doc' })).click();
+  await v(page.getByRole('button', { name: 'Explainer' })).click();
   await shot(page, '07a-condense-sheet');
   await v(page.getByRole('button', { name: 'Deep dive', exact: true })).click();
   await v(page.getByRole('button', { name: 'Selected parts' })).click();
   await expect(v(page.getByLabel('What to cover or stress'))).toBeVisible();
-  await v(page.getByRole('button', { name: 'Whole pack' })).click();
+  await v(page.getByRole('button', { name: 'Whole reference' })).click();
   await v(page.getByRole('button', { name: /Start$/ })).click();
   await expect(v(page.getByText(/^Deep dive: /))).toBeVisible({ timeout: 30_000 });
-  await expect(v(page.getByText(/Condensed doc ·/))).toBeVisible();
+  await expect(v(page.getByText(/Explainer ·/))).toBeVisible();
   await shot(page, '07-deep-dive-added');
 
   // Regenerate reopens the sheet with this doc's settings and replaces it.
@@ -297,10 +302,10 @@ test('make a deep dive next to a condensed doc, regenerate it, delete it', async
   await shot(page, '07b-actions-open');
   await expect(v(page.getByRole('button', { name: /^Download Deep dive/ }))).toBeVisible();
   await v(page.getByRole('button', { name: /^Regenerate Deep dive/ })).click();
-  await expect(v(page.getByText('Regenerate this doc', { exact: true }))).toBeVisible();
+  await expect(v(page.getByText('Regenerate this explainer', { exact: true }))).toBeVisible();
   await v(page.getByRole('button', { name: /Regenerate$/ })).click();
-  await expect(v(page.getByRole('button', { name: 'Condensed doc' }))).toBeDisabled();
-  await expect(v(page.getByRole('button', { name: 'Condensed doc' }))).toBeEnabled({
+  await expect(v(page.getByRole('button', { name: 'Explainer' }))).toBeDisabled();
+  await expect(v(page.getByRole('button', { name: 'Explainer' }))).toBeEnabled({
     timeout: 30_000,
   });
   await expect(v(page.getByText(/^Deep dive: /))).toBeVisible();
@@ -381,17 +386,39 @@ test('the reader keeps Outline, Listen and Ask in view and the rest in one menu'
   await expect(page.getByText('A new condensed doc').filter({ visible: true })).toHaveCount(0);
 });
 
-test('the pack row keeps its actions behind the same swipe as a condensed doc', async ({
+test('the reference row keeps its actions behind the same swipe as an explainer', async ({
   page,
 }) => {
   await connect(page);
   await v(page.getByRole('button', { name: /Building a post-quantum CA.*open topic/ })).click();
-  await expect(v(page.getByRole('button', { name: /^Show actions for Study pack/ }))).toBeVisible({
+  // With an explainer to read, the reference is folded under its own heading.
+  await v(page.getByRole('button', { name: 'Show reference' })).click();
+  await expect(v(page.getByRole('button', { name: /^Show actions for Full notes/ }))).toBeVisible({
     timeout: 20_000,
   });
   await shot(page, '44-pack-row-closed');
-  await v(page.getByRole('button', { name: /^Show actions for Study pack/ })).click();
-  await expect(v(page.getByRole('button', { name: /^Download Study pack/ }))).toBeVisible();
-  await v(page.getByRole('button', { name: 'Recondense the pack' })).click();
-  await expect(v(page.getByText('Rebuild the pack', { exact: true }))).toBeVisible();
+  await v(page.getByRole('button', { name: /^Show actions for Full notes/ })).click();
+  await expect(v(page.getByRole('button', { name: /^Download Full notes/ }))).toBeVisible();
+  await v(page.getByRole('button', { name: 'Rebuild the reference' })).click();
+  await expect(v(page.getByText('Rebuild from the original', { exact: true }))).toBeVisible();
+});
+
+test('building a new topic with the explainer box ticked writes both', async ({ page }) => {
+  await connect(page);
+  await v(page.getByRole('button', { name: 'Add topic' })).click();
+  await v(page.getByRole('button', { name: 'Topic name' })).click();
+  await v(page.getByLabel('Topic')).fill('Skip lists');
+  await v(page.getByRole('button', { name: 'Add and build' })).click();
+  // The modal offers the explainer, ticked by default.
+  await expect(
+    v(page.getByRole('button', { name: 'Build study pack and explainer' })),
+  ).toBeVisible();
+  await shot(page, '50-build-sheet');
+  await v(page.getByRole('button', { name: 'Build study pack and explainer' })).click();
+  await expect(v(page.getByText('Waiting for your answer'))).toBeVisible({ timeout: 20_000 });
+  await v(page.getByRole('button', { name: 'Answer' })).click();
+  await v(page.getByRole('button', { name: 'Send answers' })).click();
+  // The explainer shows under Read once it is written; the reference is folded away under its heading.
+  await expect(v(page.getByText(/Explainer ·/))).toBeVisible({ timeout: 60_000 });
+  await expect(v(page.getByRole('button', { name: 'Show reference' }))).toBeVisible();
 });

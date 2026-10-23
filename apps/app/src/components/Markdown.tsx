@@ -101,7 +101,7 @@ export function Markdown({
             accessibilityRole="link"
           >
             {' '}
-            ↗ in the pack
+            ↗ in the reference
           </Text>,
         );
       } else if (/^\[S\d+/.test(tok)) {

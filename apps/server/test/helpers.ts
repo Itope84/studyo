@@ -4,37 +4,44 @@ import { join, resolve } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { parse } from 'yaml';
-import { createServer } from '../src/app.ts';
-import { deriveFileToken, REPO_ROOT } from '../src/config.ts';
+import { REPO_ROOT, type ServerConfig } from '../src/config.ts';
+import { createServer } from '../src/server.ts';
 
 export const TOKEN = 'test-token';
 
-export async function makeServer() {
-  const library = mkdtempSync(join(tmpdir(), 'studyo-lib-'));
+export function testConfig(root: string): ServerConfig {
+  return {
+    root,
+    stateDir: join(root, '_studyo'),
+    usersDir: join(root, 'users'),
+    backupDir: join(root, '_backups'),
+    port: 0,
+    host: '127.0.0.1',
+    skillsDir: join(REPO_ROOT, 'skills'),
+    origins: '*',
+    appReturns: ['https://studyo.pages.dev'],
+    replayDir: join(REPO_ROOT, 'fixtures/replay'),
+    maxJobs: { work: 2, chat: 3 },
+    bootstrap: { id: 'test', token: TOKEN },
+  };
+}
+
+export async function makeServer(overrides: Partial<ServerConfig> = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'studyo-lib-'));
+  const library = join(root, 'users', 'test');
   cpSync(join(REPO_ROOT, 'fixtures/library'), library, { recursive: true });
-  const stateDir = join(library, '_studyo');
-  const server = await createServer(
-    {
-      library,
-      port: 0,
-      host: '127.0.0.1',
-      token: TOKEN,
-      fileToken: deriveFileToken(TOKEN),
-      stateDir,
-      skillsDir: join(REPO_ROOT, 'skills'),
-      origins: '*',
-      appReturns: ['https://studyo.pages.dev'],
-      replayDir: join(REPO_ROOT, 'fixtures/replay'),
-    },
-    { watch: false, dbFile: ':memory:' },
-  );
+  const config = { ...testConfig(root), ...overrides };
+  const server = await createServer(config, { watch: false, dbFile: ':memory:' });
+  // The default user's own parts (bus, store, runner, library), which most tests poke at directly.
+  const me = await server.getProfile(server.users.get('test')!);
   const call = async (
     method: string,
     path: string,
     body?: unknown,
     headers: Record<string, string> = {},
+    token = TOKEN,
   ) => {
-    const init: RequestInit = { method, headers: { Authorization: `Bearer ${TOKEN}`, ...headers } };
+    const init: RequestInit = { method, headers: { Authorization: `Bearer ${token}`, ...headers } };
     if (body instanceof FormData) init.body = body;
     else if (body !== undefined) {
       init.body = JSON.stringify(body);
@@ -48,7 +55,23 @@ export async function makeServer() {
     } catch {}
     return { status: res.status, json: json as any, text, headers: res.headers };
   };
-  return { ...server, library, call };
+  /** Add another user (an empty library, or a copy of the fixtures) and get their token. */
+  const addUser = async (id: string, opts: { fixtures?: boolean; admin?: boolean } = {}) => {
+    const { token, user } = server.users.create({ id, admin: opts.admin });
+    if (opts.fixtures)
+      cpSync(join(REPO_ROOT, 'fixtures/library'), join(root, 'users', id), { recursive: true });
+    return { token, user };
+  };
+  return {
+    ...server,
+    bus: me.bus,
+    store: me.store,
+    runner: me.runner,
+    root,
+    library,
+    call,
+    addUser,
+  };
 }
 
 /** Poll until `check` returns a truthy value (or time out). */

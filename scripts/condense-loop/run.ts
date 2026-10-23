@@ -30,7 +30,7 @@ import { SYSTEM } from '../../apps/server/src/jobs/prompts.ts';
 const ROOT = resolve(import.meta.dirname, '../..');
 const CFG = JSON.parse(readFileSync(join(ROOT, 'scripts/condense-loop/config.json'), 'utf8'));
 const FIX = join(ROOT, 'fixtures/condense-loop');
-const LIB = join(ROOT, 'library');
+const LIB = join(ROOT, 'library', 'users', process.env.STUDYO_USER ?? 'temitope');
 
 type Role =
   | 'generator'

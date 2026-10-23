@@ -23,6 +23,7 @@ import {
 import { ApiError, api, fileUrl } from '@/lib/api';
 import { audioFor, isGeneratedAudio } from '@/lib/audio';
 import { useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { docTitle } from '@/lib/labels';
 import { useOffline } from '@/lib/offline';
 import { play, topicQueue } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
@@ -179,7 +180,7 @@ export default function Reader() {
       wide
       header={
         <Header
-          title={resource?.title ?? 'Reading'}
+          title={resource ? docTitle(resource) : 'Reading'}
           subtitle={topic.data?.topic.title}
           right={
             <>

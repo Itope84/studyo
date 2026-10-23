@@ -1,6 +1,6 @@
 ---
 name: condense-deep
-description: Write an in-depth study guide for a Studyo topic. Where `condense` gives an overview, this skill goes deeper: worked examples, step-by-step code or traces, predict-then-reveal checks, and coverage of every concept the chapter teaches. Facts come from the pack only. Runs when the user picks "Longer" depth. Produces Markdown for the Reader view and for NotebookLM.
+description: "Write an in-depth study guide for a Studyo topic. Where `condense` gives an overview, this skill goes deeper: worked examples, step-by-step code or traces, predict-then-reveal checks, and coverage of every concept the chapter teaches. Facts come from the pack only. Runs when the user picks \"Longer\" depth. Produces Markdown for the Reader view and for NotebookLM."
 ---
 
 # Condense Deep (in-depth guide)

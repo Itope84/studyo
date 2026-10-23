@@ -44,15 +44,15 @@ export function QuizListScreen({ scope }: { scope: string }) {
         <T variant="display">Check what stuck</T>
         <T variant="body" tone="lead">
           {course
-            ? 'A quiz across the chapters you have built. Questions come from the packs, and every one points back to where it is explained.'
-            : 'Questions come from this pack, and every one points back to where it is explained. Nothing is graded unless you ask.'}
+            ? 'A quiz across the chapters you have built. Questions come from the references, and every one points back to where it is explained.'
+            : 'Questions come from this reference, and every one points back to where it is explained. Nothing is graded unless you ask.'}
         </T>
         <Button
           label="Make a quiz"
           icon="quiz"
           onPress={() => setOpen(true)}
           disabled={!online || !hasMaterial}
-          hint={!online ? reason : !hasMaterial ? 'Build a pack first.' : null}
+          hint={!online ? reason : !hasMaterial ? 'Build the study pack first.' : null}
           style={{ marginTop: space.sm }}
         />
       </View>

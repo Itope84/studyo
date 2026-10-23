@@ -7,32 +7,37 @@ import type { Db } from './db.ts';
 import type { JobRecord } from './jobs/store.ts';
 import { nowIso } from './util.ts';
 
-interface Vapid {
+export interface Vapid {
   publicKey: string;
   privateKey: string;
 }
 
-/** Web Push to installed web apps (iPhone Home Screen, desktop browsers). Keys are made once and kept. */
+/** The server's push keys, made once and kept. Every user's profile sends with the same pair. */
+export function loadVapid(stateDir: string): Vapid {
+  const file = join(stateDir, 'vapid.json');
+  let keys: Vapid;
+  if (existsSync(file)) keys = JSON.parse(readFileSync(file, 'utf8'));
+  else {
+    keys = webpush.generateVAPIDKeys();
+    writeFileSync(file, JSON.stringify(keys), { mode: 0o600 });
+  }
+  webpush.setVapidDetails(
+    process.env.STUDYO_PUSH_CONTACT ?? 'mailto:studyo@localhost',
+    keys.publicKey,
+    keys.privateKey,
+  );
+  return keys;
+}
+
+/** Web Push to installed web apps (iPhone Home Screen, desktop browsers) for one user's subscriptions. */
 export class Push {
   readonly publicKey: string;
 
   constructor(
     private db: Db,
-    stateDir: string,
+    vapid: Vapid,
   ) {
-    const file = join(stateDir, 'vapid.json');
-    let keys: Vapid;
-    if (existsSync(file)) keys = JSON.parse(readFileSync(file, 'utf8'));
-    else {
-      keys = webpush.generateVAPIDKeys();
-      writeFileSync(file, JSON.stringify(keys), { mode: 0o600 });
-    }
-    this.publicKey = keys.publicKey;
-    webpush.setVapidDetails(
-      process.env.STUDYO_PUSH_CONTACT ?? 'mailto:studyo@localhost',
-      keys.publicKey,
-      keys.privateKey,
-    );
+    this.publicKey = vapid.publicKey;
   }
 
   add(sub: PushSubscription) {
@@ -58,13 +63,13 @@ export class Push {
     } else if (job.status === 'succeeded') {
       title =
         {
-          condense: 'Condensed doc ready',
+          condense: 'Explainer ready',
           audio: 'Audio ready',
           'course-outline': 'Course outline ready',
           quiz: 'Quiz ready',
           assignment: 'Take-home ready',
           'assignment-review': 'Review ready',
-        }[job.kind as string] ?? 'Study pack ready';
+        }[job.kind as string] ?? 'Reference ready';
       body = name;
     } else if (job.status === 'failed') {
       title = 'A job failed';

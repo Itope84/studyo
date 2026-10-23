@@ -1,6 +1,6 @@
 ---
 name: assignment-review
-description: Review a learner's submission to a Studyo take-home against the assignment's acceptance criteria. The submission can be free text, a public link (such as a GitHub repository) or a file. Reads and reviews only: never runs, installs or tests submitted code. Gives specific, kind feedback and points back to the sections of the pack that explain what was missed.
+description: "Review a learner's submission to a Studyo take-home against the assignment's acceptance criteria. The submission can be free text, a public link (such as a GitHub repository) or a file. Reads and reviews only: never runs, installs or tests submitted code. Gives specific, kind feedback and points back to the sections of the pack that explain what was missed."
 ---
 
 # Assignment review

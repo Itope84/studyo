@@ -11,7 +11,12 @@ import {
   readScriptFile,
 } from '../audio.ts';
 import type { ChatStore } from '../chat.ts';
-import { type CondenseParams, finalizeCondense, guardManifest } from '../condense.ts';
+import {
+  type CondenseParams,
+  finalizeCondense,
+  guardManifest,
+  newOutputPath,
+} from '../condense.ts';
 import type { Courses } from '../courses.ts';
 import type { EventBus } from '../events.ts';
 import type { Library } from '../library.ts';
@@ -29,6 +34,7 @@ import {
   SYSTEM,
   startPrompt,
 } from './prompts.ts';
+import type { Slots } from './slots.ts';
 import { type JobRecord, type JobStore, publicJob } from './store.ts';
 
 const TIME_LIMIT_MIN: Record<JobKind, number> = {
@@ -54,8 +60,12 @@ export interface RunnerDeps {
   voice: Voice;
   adapters: Record<CliId, CliAdapter>;
   settings: () => Settings;
+  /** Server-wide cap on concurrent runs, shared by every user's runner. */
+  slots: Slots;
   notify?: (job: JobRecord, topic: Topic | null) => void;
 }
+
+const WAITING = 'Waiting for other jobs to finish';
 
 type Lane = 'work' | 'chat';
 
@@ -67,7 +77,12 @@ export class Runner {
   private ticking = new Set<Lane>();
   private stopped = false;
 
-  constructor(private d: RunnerDeps) {}
+  /** One stable wake function per lane: the slots queue runners by its identity. */
+  private wake: Record<Lane, () => void>;
+
+  constructor(private d: RunnerDeps) {
+    this.wake = { work: () => void this.tick('work'), chat: () => void this.tick('chat') };
+  }
 
   /** Recover from a restart, then start draining the queues. */
   start() {
@@ -119,6 +134,8 @@ export class Runner {
   /** Stop taking jobs and kill running CLIs (shutdown, tests). Jobs left running are failed on next start. */
   stop() {
     this.stopped = true;
+    this.d.slots.decline('work', this.wake.work);
+    this.d.slots.decline('chat', this.wake.chat);
     for (const r of this.running.values()) r.controller.abort();
   }
 
@@ -168,7 +185,16 @@ export class Runner {
     try {
       while (!this.stopped) {
         const job = this.d.store.nextQueued(lane);
-        if (!job) return;
+        if (!job) {
+          this.d.slots.decline(lane, this.wake[lane]);
+          return;
+        }
+        const release = this.d.slots.take(lane, this.wake[lane]);
+        if (!release) {
+          if (job.activity !== WAITING) this.d.store.update(job.id, { activity: WAITING });
+          this.d.slots.wait(lane, this.wake[lane]);
+          return;
+        }
         const controller = new AbortController();
         this.running.set(lane, { jobId: job.id, controller });
         const guard = guardManifest(this.d.library, job.topic_id);
@@ -197,6 +223,7 @@ export class Runner {
           await this.settleTopicAfterStop(job, `The job failed: ${(e as Error).message}`);
         } finally {
           this.running.delete(lane);
+          release();
         }
       }
     } finally {
@@ -497,6 +524,9 @@ export class Runner {
       // "Also make audio": queue it now that the doc exists. It runs next, in the same lane.
       if (made && job.params.audio) this.queueAudioAfterCondense(job, made, resources);
     }
+    // "Also write the explainer" on a first build: queue it now that the reference exists. It runs next.
+    if (job.kind === 'enrich' && job.params?.explainer)
+      this.queueExplainerAfterEnrich(job, resources);
     const problems = renderTopic(library, job.topic_id, resources);
     for (const p of problems) store.log(job.id, 'system', `Render problem: ${p}`);
     store.log(job.id, 'progress', 'Done');
@@ -507,6 +537,26 @@ export class Runner {
     });
     this.d.bus.emit('topic.updated', { topic_id: job.topic_id });
     this.d.notify?.(done, after);
+  }
+
+  /** A first build asked for the explainer: queue a standard, whole-topic condense for the reference just written. */
+  private queueExplainerAfterEnrich(job: JobRecord, resources: Topic['resources']) {
+    if (!resources.some((r) => r.type === 'pack')) return;
+    const params: CondenseParams = {
+      depth: 'default',
+      scope: 'all',
+      notes: null,
+      replace: null,
+      before: resources.filter((r) => r.type === 'condensed').map((r) => r.id),
+      output_path: newOutputPath(this.d.library.topicDir(job.topic_id), 'default', 'all'),
+    };
+    this.d.store.create({
+      topic_id: job.topic_id,
+      kind: 'condense',
+      cli: job.cli,
+      params: params as unknown as Record<string, unknown>,
+    });
+    this.d.store.log(job.id, 'progress', 'Queued the explainer');
   }
 
   /** A condense job asked for audio: queue it for the doc that was just written, replacing the old doc's audio. */

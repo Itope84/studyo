@@ -4,7 +4,7 @@
 #        scripts/new-topic.sh <slug> topic "<topic name>"
 set -euo pipefail
 slug="${1:?slug}"; kind="${2:?link|pdf|topic}"; val="${3:?value}"
-root="$(cd "$(dirname "$0")/.." && pwd)/library/topics/$slug"
+root="$(cd "$(dirname "$0")/.." && pwd)/library/users/${STUDYO_USER:-temitope}/topics/$slug"
 [ -e "$root" ] && { echo "exists: $root" >&2; exit 1; }
 mkdir -p "$root"/{sources,pack,outputs,chat}
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

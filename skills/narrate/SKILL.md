@@ -1,6 +1,6 @@
 ---
 name: narrate
-description: Turn a Studyo topic's condensed document into a spoken script, to be made into audio by the server. Two hosts (or one narrator) teach the whole document as a lively conversation a listener can follow without seeing anything: nothing the document teaches is dropped, but it is rewritten for the ear, with a hook, an arc, recaps, questions, pauses and tone marked per segment. Facts come from the document only. Runs only when the user asks for audio.
+description: "Turn a Studyo topic's condensed document into a spoken script, to be made into audio by the server. Two hosts (or one narrator) teach the whole document as a lively conversation a listener can follow without seeing anything: nothing the document teaches is dropped, but it is rewritten for the ear, with a hook, an arc, recaps, questions, pauses and tone marked per segment. Facts come from the document only. Runs only when the user asks for audio."
 ---
 
 # Narrate (spoken script)

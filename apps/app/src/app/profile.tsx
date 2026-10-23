@@ -85,8 +85,8 @@ export default function Profile() {
   return (
     <Screen header={<Header title="Your profile" />}>
       <T variant="bodySmall" tone="lead" style={{ paddingTop: space.md }}>
-        Packs and condensed docs skip what you already know. Studyo only records what you tell it or
-        what you mark as read.
+        References and explainers skip what you already know. Studyo only records what you tell it
+        or what you mark as read.
       </T>
       <SectionTitle>{`You know (${knows.length})`}</SectionTitle>
       {knows.map((k, i) => (

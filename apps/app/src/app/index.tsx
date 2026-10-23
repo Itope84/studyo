@@ -141,7 +141,7 @@ export default function Home() {
         <Empty
           icon="auto-stories"
           title="Nothing here yet"
-          body="Add a link, a PDF or just a topic name. The server builds a study pack from real sources."
+          body="Add a link, a PDF or just a topic name. The server builds a reference from real sources, and can write an easy-to-read explainer from it."
         />
       ) : null}
       {sortTopics(standalone, sort).map((t) => (

@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
+import { BuildSheet } from '@/components/DocSheets';
 import { Check, Input, Segmented } from '@/components/inputs';
 import { UploadCard } from '@/components/UploadCard';
 import { Button, Field, Header, Icon, Notice, Screen, T } from '@/components/ui';
@@ -24,6 +25,7 @@ export default function Add() {
   const [title, setTitle] = useState('');
   const [pdf, setPdf] = useState<Picked | null>(null);
   const [enrich, setEnrich] = useState(true);
+  const [buildOpen, setBuildOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState<{
     progress: UploadProgress | null;
@@ -41,7 +43,8 @@ export default function Add() {
         ? name.trim().length > 1
         : !!pdf;
 
-  const create = async () => {
+  const create = async (explainer = false) => {
+    setBuildOpen(false);
     setBusy(true);
     setError(null);
     try {
@@ -76,6 +79,7 @@ export default function Add() {
       if (mode === 'pdf' && pdf) {
         if (title.trim()) pdf.form.set('title', title.trim());
         pdf.form.set('enrich', String(enrich));
+        if (enrich && explainer) pdf.form.set('explainer', 'true');
         const controller = new AbortController();
         setSending({ progress: null, controller });
         result = await api.createTopicFromPdf(
@@ -88,12 +92,14 @@ export default function Add() {
           origin: { type: 'link', link: link.trim() },
           title: title.trim() || undefined,
           enrich,
+          ...(enrich && explainer ? { explainer: true } : {}),
         });
       } else {
         result = await api.createTopic({
           origin: { type: 'topic', name: name.trim() },
           title: title.trim() || undefined,
           enrich,
+          ...(enrich && explainer ? { explainer: true } : {}),
         });
       }
       await queryClient.invalidateQueries({ queryKey: keys.topics });
@@ -155,7 +161,7 @@ export default function Add() {
             hint={
               course
                 ? 'No source? The AI looks for a syllabus or standard textbook to follow and shows you the outline first.'
-                : 'The AI finds primary sources first, then builds the pack from them. You can check what it chose.'
+                : 'The AI finds primary sources first, then builds the reference from them. You can check what it chose.'
             }
           >
             <Input
@@ -233,7 +239,7 @@ export default function Add() {
             note={
               enrich
                 ? `Runs on your server with ${cli?.label ?? 'the selected CLI'}. It may ask one quick question about what you already know.`
-                : 'Saves the topic. Build the pack later from the topic page.'
+                : 'Saves the topic. Build the study pack later from the topic page.'
             }
           />
         )}
@@ -258,11 +264,16 @@ export default function Add() {
       <Button
         label={course ? 'Plan the course' : enrich ? 'Add and build' : 'Add topic'}
         icon="add"
-        onPress={create}
+        onPress={() => (!course && enrich ? setBuildOpen(true) : void create())}
         busy={busy}
         disabled={!ready || !online}
         hint={!online ? reason : null}
         style={{ marginTop: space.lg }}
+      />
+      <BuildSheet
+        open={buildOpen}
+        onClose={() => setBuildOpen(false)}
+        onBuild={(explainer) => void create(explainer)}
       />
     </Screen>
   );

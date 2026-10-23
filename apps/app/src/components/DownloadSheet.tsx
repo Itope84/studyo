@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { ApiError } from '@/lib/api';
 import { type DownloadFormat, downloadDoc } from '@/lib/download';
 import { useOnline, useServerInfo } from '@/lib/hooks';
+import { docTitle } from '@/lib/labels';
 import { space } from '@/theme';
 import { Sheet } from './Sheet';
 import { Icon, Notice, Row, T } from './ui';
@@ -44,7 +45,7 @@ export function DownloadSheet({
     <Sheet open={open} onClose={onClose} title="Download">
       {resource ? (
         <T variant="bodySmall" tone="lead" style={{ marginBottom: space.sm }}>
-          {resource.title}
+          {docTitle(resource)}
         </T>
       ) : null}
       <Row

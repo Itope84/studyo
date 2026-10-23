@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const lib = mkdtempSync(join(tmpdir(), 'studyo-e2e-'));
+const tmp = mkdtempSync(join(tmpdir(), 'studyo-e2e-'));
+const lib = join(tmp, 'users', 'e2e');
 cpSync(join(root, 'fixtures/library'), lib, { recursive: true });
 // One audio file so the player has something to play.
 cpSync(
@@ -17,7 +18,8 @@ const child = spawn('pnpm', ['--filter', '@studyo/server', 'start'], {
   stdio: 'inherit',
   env: {
     ...process.env,
-    STUDYO_LIBRARY: lib,
+    STUDYO_ROOT: tmp,
+    STUDYO_ADMIN_USER: 'e2e',
     STUDYO_TOKEN: 'e2e-token',
     STUDYO_PORT: '8790',
     STUDYO_REPLAY: join(root, 'fixtures/replay'),

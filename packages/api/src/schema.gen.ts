@@ -891,6 +891,13 @@ export interface components {
         };
         ServerInfo: {
             version: string;
+            /** @description Who this token belongs to. */
+            user: {
+                id: string;
+                name: string;
+                /** @description The server owner; only they change the AI settings. */
+                admin: boolean;
+            };
             file_token: string;
             /** @description Whether the server can turn a script into audio (a voice key and ffmpeg). */
             audio: {
@@ -1060,6 +1067,8 @@ export interface components {
             title?: string;
             /** @default true */
             enrich: boolean;
+            /** @description With `enrich`, write the first explainer (a whole-topic condensed doc) as soon as the reference is built. */
+            explainer?: boolean;
         };
         UpdateTopic: {
             title?: string;
@@ -1213,6 +1222,8 @@ export interface components {
              * @enum {integer}
              */
             voices?: 1 | 2;
+            /** @description For enrich, write the first explainer (a whole-topic condensed doc, standard depth) as soon as the reference is built. Only the first build sends it. Default false. */
+            explainer?: boolean;
             /** @description For condense, also make audio from the doc once it is written. With `replace`, the audio made from the replaced doc is replaced too. Default false. */
             audio?: boolean;
         };
@@ -1309,6 +1320,8 @@ export interface components {
                 title?: string;
                 /** @default true */
                 enrich: boolean;
+                /** @description With `enrich`, also write the first explainer. */
+                explainer?: boolean;
             };
         };
         KnowsEntry: {
@@ -1876,6 +1889,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Only the server owner can change these settings */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listTopics: {

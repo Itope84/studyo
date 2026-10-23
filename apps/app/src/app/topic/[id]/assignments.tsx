@@ -48,7 +48,7 @@ export default function Assignments() {
           icon="assignment"
           onPress={() => setOpen(true)}
           disabled={!online || !hasPack}
-          hint={!online ? reason : !hasPack ? 'Build a pack first.' : null}
+          hint={!online ? reason : !hasPack ? 'Build the study pack first.' : null}
           style={{ marginTop: space.sm }}
         />
       </View>

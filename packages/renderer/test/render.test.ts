@@ -2,7 +2,16 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { protectDollars, RENDERER_VERSION, RenderError, render, renderFile } from '../src/index.ts';
+import {
+  docInfo,
+  parseFrontMatter,
+  protectDollars,
+  quoteFrontMatter,
+  RENDERER_VERSION,
+  RenderError,
+  render,
+  renderFile,
+} from '../src/index.ts';
 
 const opts = { assetsHref: '../../../_studyo/assets' };
 const FIXTURE = resolve(import.meta.dirname, '../../../fixtures/library');
@@ -125,5 +134,32 @@ describe('render', () => {
     expect(r.description).toMatch(/^This first paragraph explains/);
     expect(r.description).not.toContain('S2');
     expect(r.words).toBeGreaterThan(15);
+  });
+});
+
+describe('front matter', () => {
+  const body = '\n# Title\n\nText.\n';
+
+  it('repairs unquoted values that contain a colon, quotes or a leading dash', () => {
+    const md = `---\ntopic: go-primer\nkind: pack\nbuilt: 2026-10-22\ndescription: A primer: how Go differs from "TypeScript" - and why  # note\n---\n${body}`;
+    const info = docInfo(md);
+    expect(info.description).toBe('A primer: how Go differs from "TypeScript" - and why');
+    expect(render(md, opts).html).toContain('Title');
+  });
+
+  it('leaves already quoted values, numbers and dates alone', () => {
+    const text = 'description: "Already: fine"\nbuilt: 2026-10-22\ncount: 3\nok: true';
+    expect(quoteFrontMatter(text)).toBe(text);
+    expect(parseFrontMatter(text)).toEqual({
+      description: 'Already: fine',
+      built: '2026-10-22',
+      count: 3,
+      ok: true,
+    });
+  });
+
+  it('still reports front matter it cannot repair', () => {
+    const md = `---\nkey: [unclosed\n---\n${body}`;
+    expect(() => render(md, opts)).toThrow(RenderError);
   });
 });

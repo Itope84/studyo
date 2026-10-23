@@ -13,7 +13,7 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
 import { visit } from 'unist-util-visit';
-import { parse as parseYaml } from 'yaml';
+import { parseFrontMatter } from './front.ts';
 import { frameCss } from './styles.ts';
 import { sanitizeSvg } from './svg.ts';
 
@@ -124,7 +124,7 @@ export function renderBody(markdown: string): RenderedBody {
 
       if (node.type === 'yaml') {
         try {
-          front = (parseYaml(node.value) as FrontMatter) ?? {};
+          front = parseFrontMatter<FrontMatter>(node.value) ?? {};
         } catch (e) {
           throw new RenderError(`Front matter is not valid YAML: ${(e as Error).message}`);
         }
@@ -527,7 +527,7 @@ export function docInfo(markdown: string): {
   const yaml = tree.children.find((n) => n.type === 'yaml');
   if (yaml && yaml.type === 'yaml') {
     try {
-      front = (parseYaml(yaml.value) as FrontMatter) ?? {};
+      front = parseFrontMatter<FrontMatter>(yaml.value) ?? {};
     } catch {}
   }
   const h1 = tree.children.find((n) => n.type === 'heading' && n.depth === 1);

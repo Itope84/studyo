@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Linking, Platform, Pressable, View } from 'react-native';
 import { DeleteAudioSheet, ListenSheet } from '@/components/AudioSheets';
 import { ChapterBanner } from '@/components/ChapterBanner';
-import { CondenseSheet, DeleteDocSheet } from '@/components/DocSheets';
+import { BuildSheet, CondenseSheet, DeleteDocSheet } from '@/components/DocSheets';
 import { DownloadSheet } from '@/components/DownloadSheet';
 import { Input } from '@/components/inputs';
 import { JobPanel } from '@/components/JobPanel';
@@ -33,6 +33,7 @@ import {
 import { ApiError, api, fileUrl, type UploadProgress } from '@/lib/api';
 import { audioFor, isGeneratedAudio, voicesLabel } from '@/lib/audio';
 import { useActiveJobs, useOnline, useServerInfo, useTopic, useTopicJob } from '@/lib/hooks';
+import { docTitle } from '@/lib/labels';
 import { useOffline } from '@/lib/offline';
 import { play, topicQueue, usePlayer } from '@/lib/player';
 import { keys, queryClient } from '@/lib/query';
@@ -49,11 +50,13 @@ export default function TopicScreen() {
   const offlineTopics = useOffline((s) => s.topics);
   const [regen, setRegen] = useState<Resource | null>(null);
   const [removing, setRemoving] = useState<Resource | null>(null);
-  const [sheet, setSheet] = useState<null | 'condense' | 'rename' | 'deeper' | 'more' | 'reenrich'>(
-    null,
-  );
+  const [sheet, setSheet] = useState<
+    null | 'build' | 'condense' | 'rename' | 'deeper' | 'more' | 'reenrich'
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // The reference starts folded once there is an explainer to read; with none, it is the only thing to read.
+  const [referenceFolded, setReferenceFolded] = useState<boolean | null>(null);
   const [download, setDownload] = useState<Resource | null>(null);
   const [listen, setListen] = useState<null | { replace: Resource | null }>(null);
   const [audioMenu, setAudioMenu] = useState<Resource | null>(null);
@@ -99,6 +102,8 @@ export default function TopicScreen() {
   const condensed = docs.filter((r) => r.type === 'condensed');
   const audios = topic.resources.filter(isGeneratedAudio);
   const busyTopic = !!activeJob;
+  const referenceOpen = !(referenceFolded ?? condensed.length > 0);
+  const setReferenceOpen = (open: boolean) => setReferenceFolded(!open);
   const offlineReason = online ? null : reason;
   const savedOffline = !!offlineTopics[id];
 
@@ -116,7 +121,13 @@ export default function TopicScreen() {
     }
   };
 
-  const enrich = () => run('enrich', () => api.startJob(id, { kind: 'enrich' }));
+  // Building the reference for the first time asks whether to write the first explainer too.
+  const enrich = () => setSheet('build');
+  const build = (explainer: boolean) =>
+    run('enrich', async () => {
+      await api.startJob(id, { kind: 'enrich', ...(explainer ? { explainer: true } : {}) });
+      setSheet(null);
+    });
   const addFile = async () => {
     setError(null);
     const picked = await pickFile(
@@ -252,7 +263,7 @@ export default function TopicScreen() {
       {!pack && !busyTopic ? (
         <View style={{ marginTop: space.lg }}>
           <Button
-            label="Build the study pack"
+            label="Build study pack"
             icon="auto-awesome"
             onPress={enrich}
             busy={busy === 'enrich'}
@@ -308,7 +319,7 @@ export default function TopicScreen() {
           pack ? (
             <Button
               kind="ghost"
-              label="Condensed doc"
+              label="Explainer"
               icon="add"
               onPress={() => {
                 setRegen(null);
@@ -321,12 +332,18 @@ export default function TopicScreen() {
       >
         Read
       </SectionTitle>
-      {docs.length === 0 ? (
+      {condensed.length === 0 ? (
         <T variant="bodySmall" tone="lead" style={{ paddingVertical: space.sm }}>
-          {busyTopic ? 'The pack appears here when the run finishes.' : 'No documents yet.'}
+          {!pack
+            ? busyTopic
+              ? 'The reference appears here when the run finishes.'
+              : 'No documents yet.'
+            : busyTopic
+              ? 'Your explainer appears here when the run finishes.'
+              : 'No explainer yet. Tap + Explainer for an easy-to-read version of the reference, written at your level.'}
         </T>
       ) : (
-        docs.map((r) => (
+        condensed.map((r) => (
           <DocRow
             key={r.id}
             topicId={id}
@@ -371,8 +388,8 @@ export default function TopicScreen() {
       </SectionTitle>
       {media.length === 0 ? (
         <T variant="bodySmall" tone="lead" style={{ paddingVertical: space.sm }}>
-          Listen to a condensed doc as audio, or upload audio and video you made elsewhere, for
-          example in NotebookLM.
+          Listen to an explainer as audio, or upload audio and video you made elsewhere, for example
+          in NotebookLM.
         </T>
       ) : (
         <View style={{ gap: space.sm }}>
@@ -392,6 +409,42 @@ export default function TopicScreen() {
           ))}
         </View>
       )}
+
+      {pack ? (
+        <>
+          <SectionTitle
+            right={
+              <Button
+                kind="ghost"
+                label={referenceOpen ? 'Hide reference' : 'Show reference'}
+                icon={referenceOpen ? 'expand-less' : 'expand-more'}
+                onPress={() => setReferenceOpen(!referenceOpen)}
+              />
+            }
+          >
+            Reference
+          </SectionTitle>
+          {referenceOpen ? (
+            <DocRow
+              topicId={id}
+              r={pack}
+              title="Full notes"
+              progress={progress}
+              online={online}
+              onDownload={() => setDownload(pack)}
+              onRecondense={() => setSheet('reenrich')}
+              busyTopic={busyTopic}
+              onRegenerate={() => {}}
+              onDelete={() => {}}
+            />
+          ) : (
+            <T variant="bodySmall" tone="lead" style={{ paddingVertical: space.sm }}>
+              The complete, source-grounded notes the explainers are built from. Chat and quizzes
+              point back to it.
+            </T>
+          )}
+        </>
+      ) : null}
 
       <SectionTitle>{`Sources${sources.length ? ` (${sources.length})` : ''}`}</SectionTitle>
       {sources.length === 0 ? (
@@ -455,6 +508,12 @@ export default function TopicScreen() {
         resource={download}
       />
       <RenameSheet open={sheet === 'rename'} onClose={() => setSheet(null)} topic={topic} />
+      <BuildSheet
+        open={sheet === 'build'}
+        onClose={() => setSheet(null)}
+        onBuild={build}
+        busy={busy === 'enrich'}
+      />
       <CondenseSheet
         open={sheet === 'condense'}
         onClose={() => setSheet(null)}
@@ -566,6 +625,7 @@ function LearningBlock({ topic }: { topic: Topic }) {
 function DocRow({
   topicId,
   r,
+  title,
   progress,
   online,
   onDownload,
@@ -576,6 +636,8 @@ function DocRow({
 }: {
   topicId: string;
   r: Resource;
+  /** Overrides the document's name on this row. */
+  title?: string;
   progress: Progress;
   online: boolean;
   onDownload: () => void;
@@ -588,7 +650,7 @@ function DocRow({
   const fraction = item?.done ? 1 : (item?.position ?? 0);
   const row = (
     <Row
-      title={r.title}
+      title={title ?? docTitle(r)}
       leading={
         <Icon
           name={r.type === 'pack' ? 'library-books' : 'auto-stories'}
@@ -604,11 +666,7 @@ function DocRow({
             </T>
           ) : null}
           <T variant="meta" tone="lead">
-            {r.type === 'pack'
-              ? 'Study pack'
-              : r.depth === 'longer'
-                ? 'Deep dive'
-                : 'Condensed doc'}
+            {r.type === 'pack' ? 'Reference' : r.depth === 'longer' ? 'Deep dive' : 'Explainer'}
             {r.read_minutes ? ` · ${r.read_minutes} min read` : ''}
             {item?.done ? ' · Read' : item ? ` · ${Math.round(fraction * 100)}% read` : ''}
           </T>
@@ -623,17 +681,17 @@ function DocRow({
   if (r.type === 'pack')
     return (
       <SwipeRow
-        name={r.title}
+        name={title ?? docTitle(r)}
         actions={[
           {
             icon: 'file-download',
-            label: `Download ${r.title}`,
+            label: `Download ${title ?? docTitle(r)}`,
             onPress: onDownload,
             disabled: !online,
           },
           {
             icon: 'autorenew',
-            label: 'Recondense the pack',
+            label: 'Rebuild the reference',
             onPress: onRecondense,
             disabled: !online || busyTopic,
           },
@@ -645,23 +703,23 @@ function DocRow({
   if (r.type !== 'condensed') return row;
   return (
     <SwipeRow
-      name={r.title}
+      name={title ?? docTitle(r)}
       actions={[
         {
           icon: 'file-download',
-          label: `Download ${r.title}`,
+          label: `Download ${title ?? docTitle(r)}`,
           onPress: onDownload,
           disabled: !online,
         },
         {
           icon: 'autorenew',
-          label: `Regenerate ${r.title}`,
+          label: `Regenerate ${docTitle(r)}`,
           onPress: onRegenerate,
           disabled: !online,
         },
         {
           icon: 'delete-outline',
-          label: `Delete ${r.title}`,
+          label: `Delete ${docTitle(r)}`,
           onPress: onDelete,
           tone: 'danger',
           disabled: !online,
@@ -860,16 +918,16 @@ function ReenrichSheet({
   onDeeper: () => void;
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title="Recondense">
+    <Sheet open={open} onClose={onClose} title="Rebuild the reference">
       <Row
         title="Go deeper"
-        subtitle="Add more sources on one part, with checks against them. Keeps the current pack and builds on it."
+        subtitle="Add more sources on one part, with checks against them. Keeps the current reference and builds on it."
         leading={<Icon name="travel-explore" size={22} tone="primary" />}
         onPress={onDeeper}
       />
       <Row
-        title="Rebuild the pack"
-        subtitle="Start again from the original. Replaces the current pack; condensed docs and media stay."
+        title="Rebuild from the original"
+        subtitle="Start again from the original. Replaces the current reference; explainers and media stay."
         leading={<Icon name="autorenew" size={22} tone="lead" />}
         onPress={onRebuild}
       />
@@ -912,7 +970,7 @@ function TopicMenu(props: {
         />
       ) : (
         <Row
-          title="Build the study pack"
+          title="Build study pack"
           leading={<Icon name="auto-awesome" size={20} />}
           onPress={() => {
             props.onClose();
@@ -925,7 +983,7 @@ function TopicMenu(props: {
       {topic.learning?.gaps?.length ? (
         <Row
           title="Mark topic as read"
-          subtitle="Adds its concepts to your profile, so future packs skip them."
+          subtitle="Adds its concepts to your profile, so future references skip them."
           leading={<Icon name="task-alt" size={20} />}
           onPress={props.onMarkRead}
           disabled={!online}

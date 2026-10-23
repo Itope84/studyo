@@ -21,16 +21,16 @@ The aim is to ask as little as possible: **at most one batch question** plus an 
 
 ## Profile file
 
-`library/profile.md` has a YAML front matter that the app can read and write, and a free-text body for everything else.
+`library/profile.md` has a YAML front matter that the app can read and write, and a free-text body for everything else. Always put `term` values in double quotes (a colon or `#` in an unquoted one breaks the file).
 
 ```markdown
 ---
 knows:
-  - term: certificate authority
+  - term: "certificate authority"
     via: self-reported        # self-reported | inferred | read
     topic: pc-ca-mcts         # topic id, or omit
     date: 2026-10-03
-  - term: TLS
+  - term: "TLS"
     via: self-reported
     date: 2026-10-03
 ---

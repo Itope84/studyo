@@ -68,7 +68,7 @@ export function CondenseSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={regenerate ? 'Regenerate this doc' : 'Create a condensed doc'}
+      title={regenerate ? 'Regenerate this explainer' : 'Write an explainer'}
       footer={
         <Button
           label={regenerate ? 'Regenerate' : 'Start'}
@@ -103,7 +103,7 @@ export function CondenseSheet({
       <T variant="bodySmall" tone="lead" style={{ marginBottom: space.md }}>
         {regenerate
           ? 'Writes a fresh version with the settings below. When it finishes it replaces this doc and its reading position.'
-          : 'An easy-to-follow version of the pack, written at your level. It is added next to your other docs and never replaces one. It may ask a quick question about what you already know first.'}
+          : 'An easy-to-read version of the reference, written at your level. It is added next to your other explainers and never replaces one. It may ask a quick question about what you already know first.'}
       </T>
       <Segmented
         value={depth}
@@ -122,7 +122,7 @@ export function CondenseSheet({
         value={scope}
         onChange={setScope}
         options={[
-          { value: 'all', label: 'Whole pack' },
+          { value: 'all', label: 'Whole reference' },
           { value: 'parts', label: 'Selected parts' },
         ]}
       />
@@ -142,7 +142,7 @@ export function CondenseSheet({
           ))}
           <T variant="meta" tone="lead" style={{ marginTop: space.md, marginBottom: space.xs }}>
             Anything specific you want covered or stressed? Optional. Without ticking parts it
-            applies to the whole pack.
+            applies to the whole reference.
           </T>
           <Input
             area
@@ -168,6 +168,61 @@ export function CondenseSheet({
         </View>
       ) : null}
       {error ? <Notice tone="danger" title={error} /> : null}
+    </Sheet>
+  );
+}
+
+/**
+ * The first build of a topic: the reference, and whether to write the first explainer straight after it.
+ * Only a first build offers this; rebuilding and going deeper never write an explainer on their own.
+ */
+export function BuildSheet({
+  open,
+  onClose,
+  onBuild,
+  busy = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onBuild: (explainer: boolean) => void;
+  busy?: boolean;
+}) {
+  const [explainer, setExplainer] = useState(true);
+  const [seen, setSeen] = useState(false);
+  if (open !== seen) {
+    setSeen(open);
+    if (open) setExplainer(true);
+  }
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Build study pack"
+      footer={
+        <Button
+          label={explainer ? 'Build study pack and explainer' : 'Build study pack only'}
+          icon="auto-awesome"
+          busy={busy}
+          onPress={() => onBuild(explainer)}
+        />
+      }
+    >
+      <T variant="bodySmall" tone="lead" style={{ marginBottom: space.md }}>
+        This will start the research and create a reference pack: the original plus everything you
+        need to follow it, with every addition linked to its source. This will serve as the source
+        material, and any explainers will be built from it. It may ask one quick question about what
+        you already know first.
+      </T>
+      <Check
+        checked={explainer}
+        onToggle={() => setExplainer((v) => !v)}
+        label="Also write the explainer"
+        note={
+          explainer
+            ? 'An easy-to-read version at your level, written straight after the reference. It takes a little longer.'
+            : 'You can write an explainer later with + Explainer on the topic page.'
+        }
+      />
     </Sheet>
   );
 }
@@ -200,7 +255,7 @@ export function DeleteDocSheet({
     <Sheet
       open={!!doc}
       onClose={onClose}
-      title="Delete this doc?"
+      title="Delete this explainer?"
       footer={
         <Button
           label="Delete"
@@ -225,8 +280,8 @@ export function DeleteDocSheet({
       }
     >
       <T variant="bodySmall" tone="lead">
-        {doc?.title} and your reading position in it will be removed. The study pack and your other
-        docs stay.
+        {doc?.title} and your reading position in it will be removed. The reference and your other
+        explainers stay.
       </T>
       {made.length ? (
         <View style={{ marginTop: space.md }}>

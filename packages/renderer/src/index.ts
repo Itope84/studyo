@@ -5,6 +5,7 @@ import { type Heading, RENDERER_VERSION, RenderError, renderBody } from './rende
 import { documentCss } from './styles.ts';
 import { GOOGLE_FONTS_HREF } from './tokens.ts';
 
+export { parseFrontMatter, quoteFrontMatter } from './front.ts';
 export type { FrontMatter, Heading, RenderedBody } from './render.ts';
 export { docInfo, protectDollars, RENDERER_VERSION, RenderError, renderBody } from './render.ts';
 export { cssVars, GOOGLE_FONTS_HREF, type Palette, type ThemeName, tokens } from './tokens.ts';

@@ -13,9 +13,11 @@ kind: pack | condensed
 built: YYYY-MM-DD
 depth: standard | deep        # packs
 scope: all | <section ids>    # condensed
-description: <one or two sentences>   # optional; shown in the app's document list. Defaults to the first paragraph
+description: "<one or two sentences>"   # optional; shown in the app's document list. Defaults to the first paragraph
 ---
 ```
+
+**Quote every free-text string in YAML** (`description`, titles, any `term:`), always with double quotes on one line, even when it looks safe. An unquoted value with a colon (`description: A tool: how it works`), a leading `-`, `#`, `*`, `&`, `[` or `{`, or a stray quote breaks the YAML and the pack cannot be shown. Inside the quotes, write a literal `"` as `\"` and a backslash as `\\`. Never wrap a value onto a second line. Ids, dates and the fixed words (`pack`, `deep`, `all`) need no quotes.
 
 ## Section ids
 

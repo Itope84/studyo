@@ -202,6 +202,11 @@ export async function removeTopic(id: string): Promise<void> {
   });
 }
 
+/** Forget every offline copy (a different person signed in on this device). */
+export async function removeAllTopics(): Promise<void> {
+  for (const id of Object.keys(useOffline.getState().topics)) await removeTopic(id);
+}
+
 /** Assets a rendered doc loads: images, stylesheets (KaTeX), the mermaid script, Google Fonts. */
 export function docAssets(html: string, htmlUrl: string): string[] {
   const out = new Set<string>();

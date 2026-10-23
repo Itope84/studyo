@@ -47,11 +47,7 @@ import type {
 import { courseIdOf, courseScope, isCourseScope } from '@studyo/api';
 import { writeSharedAssets } from '@studyo/renderer';
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
-import { claudeAdapter } from './adapters/claude.ts';
-import { opencodeAdapter } from './adapters/opencode.ts';
-import { replayAdapter } from './adapters/replay.ts';
 import type { CliAdapter } from './adapters/types.ts';
 import {
   type AudioParams,
@@ -62,22 +58,24 @@ import {
 } from './audio.ts';
 import { ChatStore } from './chat.ts';
 import { type CondenseParams, deleteCondensed, newOutputPath } from './condense.ts';
-import { type Config, VERSION } from './config.ts';
+import { type ProfileConfig, VERSION } from './config.ts';
 import { Courses, summariseCourse } from './courses.ts';
 import { openDb } from './db.ts';
 import { EventBus } from './events.ts';
 import { serveFile } from './files.ts';
 import { inboxKind, listInbox } from './inbox.ts';
 import { Runner } from './jobs/runner.ts';
+import type { Slots } from './jobs/slots.ts';
 import { type JobRecord, JobStore, publicJob } from './jobs/store.ts';
 import { Library, mediaTypeFor, titleFromFilename } from './library.ts';
-import { closePdfBrowser, ensurePdf } from './pdf.ts';
+import { ensurePdf } from './pdf.ts';
 import { pdfHasText } from './pdfcheck.ts';
 import { markRead, readProfile, writeProfile } from './profile.ts';
-import { Push } from './push.ts';
+import { Push, type Vapid } from './push.ts';
 import { ensureRendered } from './render.ts';
 import { SettingsStore } from './settings.ts';
 import { Study } from './study.ts';
+import type { Users } from './users.ts';
 import {
   badRequest,
   conflict,
@@ -89,7 +87,7 @@ import {
   slugify,
   today,
 } from './util.ts';
-import { createVoice } from './voice/index.ts';
+import type { Voice } from './voice/index.ts';
 import { watchLibrary } from './watch.ts';
 
 export interface ServerOptions {
@@ -99,72 +97,20 @@ export interface ServerOptions {
   watch?: boolean;
 }
 
+/** What every user's profile shares: the CLIs, the voice, push keys, the job cap and the user list. */
+export interface Shared {
+  adapters: Record<CliId, CliAdapter>;
+  detected: Record<CliId, { installed: boolean; version: string | null }>;
+  voice: Voice;
+  vapid: Vapid;
+  slots: Slots;
+  users: Users;
+}
+
 const MAX_UPLOAD = 1024 * 1024 * 1024; // 1 GB
 
-export async function createServer(config: Config, options: ServerOptions = {}) {
-  mkdirSync(config.stateDir, { recursive: true });
-  // Shared renderer assets (mermaid, KaTeX) are needed by chat maths too, before any document is rendered.
-  writeSharedAssets(join(config.stateDir, 'assets'));
-  const library = new Library(config.library);
-  const db = openDb(config.stateDir, options.dbFile);
-  const bus = new EventBus(db);
-  const store = new JobStore(db, bus);
-  const chat = new ChatStore((id) => library.topicDir(id));
-  const courses = new Courses(library);
-  const study = new Study(library);
-  const adapters: Record<CliId, CliAdapter> = config.replayDir
-    ? {
-        claude: replayAdapter(config.replayDir, 'claude'),
-        opencode: replayAdapter(config.replayDir, 'opencode'),
-      }
-    : { claude: claudeAdapter(), opencode: opencodeAdapter() };
-  Object.assign(adapters, options.adapters);
-
-  const detected = Object.fromEntries(
-    await Promise.all(Object.values(adapters).map(async (a) => [a.id, await a.detect()] as const)),
-  ) as Record<CliId, { installed: boolean; version: string | null }>;
-  const settings = new SettingsStore(
-    config.stateDir,
-    detected.claude.installed ? 'claude' : 'opencode',
-  );
-  const push = new Push(db, config.stateDir);
-  const voice = createVoice(config);
-  const runner = new Runner({
-    library,
-    store,
-    bus,
-    chat,
-    courses,
-    study,
-    voice,
-    adapters,
-    settings: () => settings.get(),
-    notify: (job, topic) => void push.notifyJob(job, topic),
-  });
-  runner.start();
-  const stopWatch = options.watch === false ? () => {} : watchLibrary(library, bus, store);
-
-  const app = new Hono();
-
-  app.use(
-    '*',
-    cors({
-      origin: config.origins === '*' ? '*' : config.origins,
-      allowHeaders: [
-        'Authorization',
-        'Content-Type',
-        'Range',
-        'Last-Event-ID',
-        'CF-Access-Client-Id',
-        'CF-Access-Client-Secret',
-        'CF-Access-Token',
-      ],
-      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      exposeHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length'],
-      maxAge: 600,
-    }),
-  );
-
+/** The error responses every app in the server uses. */
+export function installErrorHandlers(app: Hono<any>) {
   app.onError((err, c) => {
     if (err instanceof HttpError)
       return c.json({ error: { code: err.code, message: err.message } }, err.status);
@@ -175,76 +121,64 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     );
   });
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'No such endpoint.' } }, 404));
+}
 
-  // Uploads are logged when they start and finish, so a slow connection shows up in the server's output.
-  app.use('*', async (c, next) => {
-    const len = Number(c.req.header('Content-Length') ?? 0);
-    if (c.req.method !== 'POST' || len < 1024 * 1024) return next();
-    const started = Date.now();
-    console.log(`upload started: ${c.req.path} ${(len / 1048576).toFixed(1)} MB`);
-    await next();
-    const secs = (Date.now() - started) / 1000;
-    console.log(
-      `upload finished: ${c.req.path} ${c.res.status} in ${secs.toFixed(1)}s (${(len / 1048576 / Math.max(secs, 0.01)).toFixed(1)} MB/s)`,
-    );
+/** One user's app: their library, database, runner and every route. Authentication happens in front of it. */
+export async function createProfile(
+  config: ProfileConfig,
+  shared: Shared,
+  options: ServerOptions = {},
+) {
+  const { adapters, detected, voice } = shared;
+  mkdirSync(config.stateDir, { recursive: true });
+  // Shared renderer assets (mermaid, KaTeX) are needed by chat maths too, before any document is rendered.
+  writeSharedAssets(join(config.stateDir, 'assets'));
+  const library = new Library(config.library);
+  const db = openDb(config.stateDir, options.dbFile);
+  const bus = new EventBus(db);
+  const store = new JobStore(db, bus);
+  const chat = new ChatStore((id) => library.topicDir(id));
+  const courses = new Courses(library);
+  const study = new Study(library);
+  const settings = new SettingsStore(
+    config.stateDir,
+    detected.claude.installed ? 'claude' : 'opencode',
+  );
+  const push = new Push(db, shared.vapid);
+  const runner = new Runner({
+    library,
+    store,
+    bus,
+    chat,
+    courses,
+    study,
+    voice,
+    adapters,
+    settings: () => settings.get(),
+    slots: shared.slots,
+    notify: (job, topic) => {
+      console.log(`[${config.user.id}] job ${job.id} ${job.kind} ${job.status}`);
+      void push.notifyJob(job, topic);
+    },
   });
+  runner.start();
+  const stopWatch = options.watch === false ? () => {} : watchLibrary(library, bus, store);
 
-  const tokenBuf = Buffer.from(config.token);
-  app.use('*', async (c, next) => {
-    const path = c.req.path;
-    if (
-      c.req.method === 'OPTIONS' ||
-      path === '/health' ||
-      path === '/auth/access' ||
-      path.startsWith('/f/')
-    ) {
-      return next();
-    }
-    const header = c.req.header('Authorization') ?? '';
-    const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
-    if (given.length !== tokenBuf.length || !timingSafeEqual(given, tokenBuf)) {
-      throw new HttpError(401, 'unauthorized', 'The access token is missing or wrong.');
-    }
-    return next();
-  });
+  const app = new Hono();
+
+  installErrorHandlers(app);
 
   // ---- Server ---------------------------------------------------------------
 
-  app.get('/health', (c) => c.json({ ok: true, name: 'studyo' as const, version: VERSION }));
-
-  /**
-   * Cloudflare Access hand-off for apps on another hostname (Android, a web app on Pages). The app opens this
-   * page in a browser; Access makes the person sign in before the request gets here, then forwards it with
-   * their Access token in `Cf-Access-Jwt-Assertion`. We send that token back to the app, which puts it in a
-   * `cf-access-token` header on every request. Only allowed return addresses get the token.
-   */
-  app.get('/auth/access', (c) => {
-    const back = c.req.query('return') ?? '';
-    if (!returnAllowed(back, config.appReturns)) {
-      return c.html(
-        page(
-          'Return address not allowed',
-          `Studyo won't send your sign-in to <code>${escapeHtml(back || '(none)')}</code>. Add the app's address to STUDYO_ORIGINS (web) or STUDYO_APP_URLS on the server.`,
-        ),
-        400,
-      );
-    }
-    const jwt = c.req.header('Cf-Access-Jwt-Assertion');
-    if (!jwt) {
-      return c.html(
-        page(
-          'No Cloudflare Access sign-in',
-          'This request did not come through Cloudflare Access, so there is nothing to hand back. If the server is not behind Access, connect without signing in.',
-        ),
-        400,
-      );
-    }
-    return c.redirect(`${back}#cf_token=${encodeURIComponent(jwt)}`, 302);
-  });
-
   app.get('/server', async (c) => {
+    const me = shared.users.get(config.user.id) ?? {
+      id: config.user.id,
+      name: config.user.id,
+      admin: false,
+    };
     const info: ServerInfo = {
       version: VERSION,
+      user: { id: me.id, name: me.name, admin: me.admin },
       file_token: config.fileToken,
       clis: Object.values(adapters).map((a) => ({
         id: a.id,
@@ -265,6 +199,8 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
 
   app.get('/settings', (c) => c.json(settings.get()));
   app.put('/settings', async (c) => {
+    if (!shared.users.get(config.user.id)?.admin)
+      throw new HttpError(403, 'forbidden', 'Only the server owner can change the AI settings.');
     const body = await json<Settings>(c);
     if (body.cli && !detected[body.cli]?.installed)
       throw badRequest(`${body.cli} is not installed on the server.`);
@@ -320,7 +256,11 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
         join(library.topicDir(manifest.id), 'sources', safeName),
         Buffer.from(await file.arrayBuffer()),
       );
-      result = await afterCreate(manifest.id, String(form.enrich ?? 'true') !== 'false');
+      result = await afterCreate(
+        manifest.id,
+        String(form.enrich ?? 'true') !== 'false',
+        String(form.explainer ?? 'false') === 'true',
+      );
     } else {
       const body = await json<CreateTopic>(c);
       const origin = body.origin;
@@ -339,7 +279,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
           origin: { type: 'link', link: url.href },
           slugHint: title,
         });
-        result = await afterCreate(manifest.id, body.enrich !== false);
+        result = await afterCreate(manifest.id, body.enrich !== false, body.explainer === true);
       } else if (origin?.type === 'topic') {
         const name = String(origin.name ?? '').trim();
         if (name.length < 2) throw badRequest('Give the topic a name.');
@@ -348,7 +288,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
           origin: { type: 'topic', name },
           slugHint: name,
         });
-        result = await afterCreate(manifest.id, body.enrich !== false);
+        result = await afterCreate(manifest.id, body.enrich !== false, body.explainer === true);
       } else {
         throw badRequest('origin.type must be link or topic (use multipart for a PDF).');
       }
@@ -356,9 +296,13 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
     return c.json(result, 201);
   });
 
-  async function afterCreate(topicId: string, enrich: boolean): Promise<TopicWithJob> {
+  async function afterCreate(
+    topicId: string,
+    enrich: boolean,
+    explainer = false,
+  ): Promise<TopicWithJob> {
     let job: Job | null = null;
-    if (enrich) job = publicJob(enqueue(topicId, 'enrich', {}));
+    if (enrich) job = publicJob(enqueue(topicId, 'enrich', explainer ? { explainer: true } : {}));
     bus.emit('topic.updated', { topic_id: topicId });
     return { topic: await library.readTopic(topicId, { persist: true }), job };
   }
@@ -723,6 +667,7 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
       Object.assign(params, audio);
     }
     if (body.kind === 'enrich-deep' && body.focus) params.focus = body.focus;
+    if (body.kind === 'enrich' && body.explainer) params.explainer = true;
     return c.json(publicJob(enqueue(id, body.kind, params)), 202);
   });
 
@@ -1321,7 +1266,11 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
         slugHint: title,
       });
       renameSync(from, join(library.topicDir(manifest.id), 'sources', safeName));
-      result = await afterCreate(manifest.id, body.new_topic.enrich !== false);
+      result = await afterCreate(
+        manifest.id,
+        body.new_topic.enrich !== false,
+        body.new_topic.explainer === true,
+      );
     } else {
       throw badRequest('Give a topic_id or new_topic.');
     }
@@ -1422,7 +1371,6 @@ export async function createServer(config: Config, options: ServerOptions = {}) 
   });
 
   const close = () => {
-    void closePdfBrowser();
     runner.stop();
     stopWatch();
     db.close();
@@ -1500,11 +1448,11 @@ export function returnAllowed(url: string, allowed: string[]): boolean {
   });
 }
 
-const escapeHtml = (s: string) =>
+export const escapeHtml = (s: string) =>
   s.replace(
     /[&<>"]/g,
     (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] as string,
   );
 
-const page = (title: string, body: string) =>
+export const page = (title: string, body: string) =>
   `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font:16px/1.5 system-ui,sans-serif;max-width:520px;margin:48px auto;padding:0 16px;color:#1E1E1C;background:#FBFBFA"><h1 style="font-size:22px">${title}</h1><p>${body}</p></body>`;

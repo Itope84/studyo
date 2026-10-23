@@ -9,9 +9,9 @@ import { Button, Icon, ProgressBar, T, timeAgo } from './ui';
 
 export const jobLabel = (job: Job) =>
   ({
-    enrich: 'Building your study pack',
+    enrich: 'Building your reference',
     'enrich-deep': 'Going deeper',
-    condense: 'Writing a condensed doc',
+    condense: 'Writing your explainer',
     audio: 'Making your audio',
     answer: 'Chat reply',
     'course-outline': 'Planning your course',

@@ -5,6 +5,7 @@ import { Input } from '@/components/inputs';
 import { Button, Field, Header, Notice, Screen, T } from '@/components/ui';
 import { signInWithAccess } from '@/lib/access';
 import { ApiError, api, sameOriginServer } from '@/lib/api';
+import { removeAllTopics } from '@/lib/offline';
 import { type Connection, usePrefs } from '@/lib/prefs';
 import { queryClient } from '@/lib/query';
 import { space } from '@/theme';
@@ -59,8 +60,11 @@ export default function Connect() {
       const health = await api.health(conn);
       if (health?.name !== 'studyo')
         throw new ApiError(0, 'not_studyo', "That address answered, but it isn't a Studyo server.");
-      await api.server(conn);
+      const info = await api.server(conn);
       queryClient.clear();
+      const prefs = usePrefs.getState();
+      if (prefs.lastUserId && prefs.lastUserId !== info.user.id) await removeAllTopics();
+      prefs.setLastUserId(info.user.id);
       setConnection(conn);
       router.replace('/');
     } catch (e) {
@@ -74,7 +78,7 @@ export default function Connect() {
       } else {
         setError(
           e instanceof ApiError
-            ? e.status === 401
+            ? e.status === 401 && e.code !== 'account_disabled'
               ? 'The server refused the access token.'
               : e.message
             : (e as Error).message,

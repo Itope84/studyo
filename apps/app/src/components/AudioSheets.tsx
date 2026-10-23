@@ -184,8 +184,8 @@ export function ListenSheet({
               radio
               checked={source === 'new'}
               onToggle={() => setSource('new')}
-              label="A new condensed doc"
-              note="Written first, then recorded. You keep the doc."
+              label="A new explainer"
+              note="Written first, then recorded. You keep the explainer."
             />
           ) : null}
         </View>

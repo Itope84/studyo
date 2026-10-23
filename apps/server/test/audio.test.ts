@@ -331,13 +331,11 @@ describe('Gemini engine', () => {
     vi.useFakeTimers();
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ error: { code: 429, message: 'quota', details: [] } }), {
-            status: 429,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 429, message: 'quota', details: [] } }), {
+          status: 429,
+        }),
+      ),
     );
     const controller = new AbortController();
     const run = engine().render({

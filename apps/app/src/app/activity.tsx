@@ -56,7 +56,7 @@ export default function Activity() {
           value={show}
           onChange={setShow}
           options={[
-            { value: 'builds', label: 'Packs and docs' },
+            { value: 'builds', label: 'References and explainers' },
             { value: 'all', label: 'Including chat' },
           ]}
         />
@@ -69,7 +69,7 @@ export default function Activity() {
         <Empty
           icon="timeline"
           title="Nothing yet"
-          body="Building packs, condensed docs and chat replies show up here as they run."
+          body="Building references, writing explainers and chat replies show up here as they run."
         />
       ) : null}
       {waiting.length ? <SectionTitle>Needs you</SectionTitle> : null}

@@ -369,6 +369,46 @@ describe('jobs', () => {
     );
   });
 
+  async function firstBuild(body: Record<string, unknown>) {
+    const created = await s.call('POST', '/topics', {
+      origin: { type: 'link', link: 'https://example.com/article' },
+      ...body,
+    });
+    const job = created.json.job;
+    const waiting = await waitFor(async () => {
+      const j = await jobStatus(job.id);
+      return j.status === 'needs_input' ? j : null;
+    });
+    await s.call('POST', `/jobs/${job.id}/answers`, {
+      question_set_id: waiting.questions.id,
+      answers: { known: { selected: ['tls'] }, goal: { text: 'Explain it to a friend' } },
+    });
+    await waitFor(async () => (await jobStatus(job.id)).status === 'succeeded');
+    return created.json.topic.id as string;
+  }
+
+  it('writes the explainer right after a first build when asked, and not otherwise', async () => {
+    s = await makeServer();
+    const withExplainer = await firstBuild({ explainer: true });
+    const jobs = await waitFor(async () => {
+      const list = (await s.call('GET', `/jobs?topic_id=${withExplainer}`)).json.jobs as {
+        kind: string;
+        status: string;
+      }[];
+      return list.some((j) => j.kind === 'condense' && j.status === 'succeeded') ? list : null;
+    });
+    expect(jobs.map((j) => j.kind).sort()).toEqual(['condense', 'enrich']);
+    const detail = (await s.call('GET', `/topics/${withExplainer}`)).json;
+    const doc = detail.topic.resources.find((r: { type: string }) => r.type === 'condensed');
+    expect(doc.html_path).toMatch(/^outputs\/condensed-all-.*\.html$/);
+
+    const plain = await firstBuild({});
+    const plainJobs = (await s.call('GET', `/jobs?topic_id=${plain}`)).json.jobs as {
+      kind: string;
+    }[];
+    expect(plainJobs.map((j) => j.kind)).toEqual(['enrich']);
+  });
+
   it('streams a chat reply, keeps it, and offers to enrich', async () => {
     s = await makeServer();
     const sent = await s.call('POST', '/topics/pc-ca-mcts/chat', {

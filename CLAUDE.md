@@ -12,13 +12,14 @@ packages/renderer/   Markdown + directives → themed HTML (callouts, mermaid, K
 apps/server/         Hono API, library scanner, job runner, CLI adapters (claude, opencode, replay), SSE, PDF (playwright-core), web push
 apps/app/            Expo Router app (SDK 57). Screens in src/app, shared UI in src/components, data in src/lib
 skills/              skills the CLIs run; linked into <library>/.claude/skills by the server (course-outline, course-plan, enrich-chapter, quiz, quiz-grade, assignment, assignment-review are the course-era ones)
-library/             the user's real library (gitignored). Server state in library/_studyo/
+library/             gitignored. users/<id>/ is each person's library (topics, courses, inbox, profile.md, _studyo/ with their DB and settings); library/_studyo/ holds the users table (server.db), push keys and the log
 fixtures/            committed test library, replay scripts (fake AI jobs), one audio file
 e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e server, fake Cloudflare Access, screenshots)
 ```
 
 ## How it works (the decisions that matter)
 
+- **Names on screen vs in code.** The app says **Reference** (the full source-grounded notes; `pack` in code, `pack/pack.md`, resource type `pack`) and **Explainer** (the easy-to-read document written from it; `condensed` / the `condense` job and skill). A first build can also write the first explainer: the app sends `explainer: true` with the build and the runner queues a standard, whole-topic condense after the enrich. Only the first build offers it.
 - **Contract first.** Change `packages/api/openapi.yaml`, run `pnpm --filter @studyo/api gen`, then server, then app. The app's types come from it.
 - **The library folder is the source of truth.** Each topic is a folder with `topic.json` (manifest), `progress.json` (positions, done marks, bookmarks), `sources/`, `pack/`, `outputs/`, `chat/`. `_`-prefixed paths are scratch. The server derives extra fields (html_path, description, read_minutes, chapters, cover_path, summary) on read.
 - **All AI work is a job** (SQLite in `_studyo/`): queued → running → needs_input → succeeded/failed/cancelled. Work lane (one at a time) and chat lane. A skill that needs the learner writes `_job/questions.json`, prints `[studyo] NEEDS_INPUT` and ends its turn; answers resume the same CLI session. Skills print `[studyo] n/N phase: …` for progress.
@@ -26,6 +27,7 @@ e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e s
 - **Skills write Markdown; the renderer makes HTML.** Never have the AI write HTML. PDFs are printed from that HTML by headless Chromium.
 - **Courses.** `courses/<id>/course.json` plus `index.md`, `sources/`, `chat/`, `quizzes/`. Chapters are ordinary topic folders in `topics/` with a `course` field, made by the server from `course.json` after the outline job. Course-level jobs, chat and quizzes use the scope id `course--<id>` where a topic id goes (`isCourseScope` in `@studyo/api`). Quizzes live in `<topic or course>/quizzes/`, take-home work in `<topic>/assignments/`; the skills write the JSON and the server (`study.ts`) reads and merges it. See `docs/courses-brief.md`.
 - **Audio.** The `narrate` skill turns a condensed doc into a spoken script (`outputs/audio/*.script.json`); the server (`apps/server/src/voice/`) speaks it with Gemini TTS (`GEMINI_API_KEY`, needs ffmpeg), one request per ~10 minutes of speech, cached, and writes `outputs/<name>.m4a` plus `outputs/audio/<name>.audio.json` (the parts, shown as chapters). Audio belongs to no doc: deleting or regenerating a doc leaves its audio unless the learner ticks the box.
+- **Many users, one server.** `server.ts` authenticates (token hash → users table) and hands each request to that user's own app (`createProfile` in `app.ts`: library, DB, runner, all routes). `jobs/slots.ts` caps concurrent AI runs across users. `pnpm users …` (src/cli) adds, resets, disables, lists and backs up users. Plan: `docs/multi-user-plan.md`.
 - **Both CLIs, always.** Anything CLI-related goes through the adapter interface. Unattended runs switch off MCP servers.
 - **Offline (web).** `apps/app/public/sw.js` keeps the app (stamped per build by `scripts/build-sw.mjs`), every API answer (network first), and topics saved with "Make available offline" (`src/lib/offline.ts`). Progress made offline waits in `src/lib/outbox.ts`. See `docs/offline-brief.md`.
 - **Files without headers:** media and the Reader load from `/f/<file token>/…` (token derived from the access token).
@@ -33,7 +35,7 @@ e2e/                 Playwright browser tests; scripts/ has helpers (demo, e2e s
 
 ## Deployed (as of Oct 3, 2026)
 
-- **Server:** this Mac, as login item `com.studyo.server` (`scripts/install-launchd.sh`). API :8787, web app :8788. Logs `library/_studyo/server.log`. Restart: `launchctl kickstart -k gui/$(id -u)/com.studyo.server`. Settings in `<repo>/.env` (gitignored; see `.env.example`).
+- **Server:** this Mac, as login item `com.studyo.server` (`scripts/install-launchd.sh`). API :8787, web app :8788. Logs `library/_studyo/server.log`. The owner's library is `library/users/temitope/`. Restart: `launchctl kickstart -k gui/$(id -u)/com.studyo.server`. Settings in `<repo>/.env` (gitignored; see `.env.example`).
 - **API hostname:** `studyo-api.ilesan.me` → Cloudflare tunnel `career-ops` (shared with fitnerapp sites; config `~/.cloudflared/config.yml`, runs as root). Cloudflare Access not set up yet: the access token is the only protection.
 - **Web app:** Cloudflare Worker `studyo` with static assets on `studyo.ilesan.me` (`apps/app/wrangler.jsonc`). Deploy: `pnpm deploy:web`. `apps/app/.env.production` bakes in the default server address.
 - **Pending:** `apps/app/worker/index.js` (http→https redirect) was added before the user chose to enable "Always Use HTTPS" in the dashboard instead. Remove `main`, `binding` and `run_worker_first` from `wrangler.jsonc`, delete `worker/`, and redeploy once they confirm.

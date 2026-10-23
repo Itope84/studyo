@@ -454,7 +454,7 @@ async function discover(dir: string, manifest: Manifest): Promise<Resource[]> {
       .sort();
 
   if (existsSync(join(dir, 'pack', 'pack.md')))
-    await add('pack/pack.md', 'pack', 'Study pack', 'pack');
+    await add('pack/pack.md', 'pack', 'Reference', 'pack');
 
   for (const name of await list('sources')) {
     const ext = extname(name).toLowerCase();

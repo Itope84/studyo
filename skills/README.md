@@ -1,6 +1,6 @@
 # Studyo skills
 
-Plain-file skills that run the same from Claude Code, OpenCode or the job runner. Each skill is a folder with a `SKILL.md` (only `name` and `description` in the frontmatter, so both CLIs load it). Shared rules live in `_shared/` and are referenced by relative path, so keep the folder together.
+Plain-file skills that run the same from Claude Code, OpenCode or the job runner. Each skill is a folder with a `SKILL.md` (only `name` and `description` in the frontmatter, so both CLIs load it). Put the `description` in double quotes: a colon inside an unquoted one is invalid YAML. Shared rules live in `_shared/` and are referenced by relative path, so keep the folder together.
 
 | Skill | When | Depth |
 | --- | --- | --- |

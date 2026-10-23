@@ -94,6 +94,11 @@ export default function Settings() {
                 v{info.version} · library {formatBytes(info.storage.library_bytes)}
               </T>
             ) : null}
+            {info ? (
+              <T variant="meta" tone="lead">
+                Signed in as {info.user.name}
+              </T>
+            ) : null}
           </View>
         }
       />
@@ -114,74 +119,79 @@ export default function Settings() {
         />
       </View>
 
-      <SectionTitle>AI on the server</SectionTitle>
-      <T variant="bodySmall" tone="lead" style={{ marginBottom: space.sm }}>
-        Which CLI runs enrichment, condensing and chat. Both use the same skills.
-      </T>
-      {info && cli ? (
+      {info?.user.admin ? (
         <>
-          <Segmented
-            value={cli}
-            onChange={(v) => {
-              setCli(v);
-              setSaved(false);
-            }}
-            options={info.clis.map((c) => ({
-              value: c.id,
-              label: c.label,
-              disabled: !c.installed,
-            }))}
-          />
-          <View style={{ marginTop: space.sm, gap: 4 }}>
-            {info.clis.map((c) => (
-              <T key={c.id} variant="meta" tone={c.installed ? 'lead' : 'danger'}>
-                {c.label}:{' '}
-                {c.installed
-                  ? `installed${c.version ? ` (${c.version})` : ''}`
-                  : 'not installed on the server'}
-              </T>
-            ))}
-          </View>
-          <View style={{ marginTop: space.md }}>
-            <Field
-              label={cli === 'claude' ? 'Claude model (optional)' : 'OpenCode model (optional)'}
-              hint={
-                cli === 'claude'
-                  ? 'Empty uses Claude Code’s default. For example: sonnet, opus.'
-                  : 'provider/model. Empty uses your OpenCode default.'
-              }
-            >
-              <Input
-                value={models[cli]}
-                onChangeText={(v) => {
-                  setModels((m) => ({ ...m, [cli]: v }));
+          <SectionTitle>AI on the server</SectionTitle>
+          <T variant="bodySmall" tone="lead" style={{ marginBottom: space.sm }}>
+            Which CLI builds references, writes explainers and answers chat. Both use the same
+            skills.
+          </T>
+          {info && cli ? (
+            <>
+              <Segmented
+                value={cli}
+                onChange={(v) => {
+                  setCli(v);
                   setSaved(false);
                 }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Default"
+                options={info.clis.map((c) => ({
+                  value: c.id,
+                  label: c.label,
+                  disabled: !c.installed,
+                }))}
               />
-            </Field>
-          </View>
-          {error ? <Notice tone="danger" title={error} /> : null}
-          <Button
-            label={saved ? 'Saved' : 'Save'}
-            icon={saved ? 'check' : undefined}
-            onPress={save}
-            busy={saving}
-            kind="secondary"
-          />
+              <View style={{ marginTop: space.sm, gap: 4 }}>
+                {info.clis.map((c) => (
+                  <T key={c.id} variant="meta" tone={c.installed ? 'lead' : 'danger'}>
+                    {c.label}:{' '}
+                    {c.installed
+                      ? `installed${c.version ? ` (${c.version})` : ''}`
+                      : 'not installed on the server'}
+                  </T>
+                ))}
+              </View>
+              <View style={{ marginTop: space.md }}>
+                <Field
+                  label={cli === 'claude' ? 'Claude model (optional)' : 'OpenCode model (optional)'}
+                  hint={
+                    cli === 'claude'
+                      ? 'Empty uses Claude Code’s default. For example: sonnet, opus.'
+                      : 'provider/model. Empty uses your OpenCode default.'
+                  }
+                >
+                  <Input
+                    value={models[cli]}
+                    onChangeText={(v) => {
+                      setModels((m) => ({ ...m, [cli]: v }));
+                      setSaved(false);
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="Default"
+                  />
+                </Field>
+              </View>
+              {error ? <Notice tone="danger" title={error} /> : null}
+              <Button
+                label={saved ? 'Saved' : 'Save'}
+                icon={saved ? 'check' : undefined}
+                onPress={save}
+                busy={saving}
+                kind="secondary"
+              />
+            </>
+          ) : (
+            <T variant="meta" tone="lead">
+              Connect to see the server's options.
+            </T>
+          )}
         </>
-      ) : (
-        <T variant="meta" tone="lead">
-          Connect to see the server's options.
-        </T>
-      )}
+      ) : null}
 
       <SectionTitle>You</SectionTitle>
       <Row
         title="What Studyo knows about you"
-        subtitle="Concepts you know and how you like things explained. Packs use it to skip what you know."
+        subtitle="Concepts you know and how you like things explained. References and explainers use it to skip what you know."
         leading={<Icon name="person-outline" size={20} tone="lead" />}
         trailing={<Icon name="chevron-right" size={20} tone="faint" />}
         onPress={() => router.push('/profile')}
@@ -204,7 +214,7 @@ export default function Settings() {
           tone="neutral"
           icon="notifications-active"
           title="On"
-          body="You'll hear when Studyo has a question, a pack is ready or a job fails."
+          body="You'll hear when Studyo has a question, a reference or explainer is ready, or a job fails."
         />
       ) : push === 'off' ? (
         <Button

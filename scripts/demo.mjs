@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const lib = mkdtempSync(join(tmpdir(), 'studyo-demo-'));
+const tmp = mkdtempSync(join(tmpdir(), 'studyo-demo-'));
+const lib = join(tmp, 'users', 'demo');
 cpSync(join(root, 'fixtures/library'), lib, { recursive: true });
 cpSync(
   join(root, 'fixtures/media/deep-dive.m4a'),
@@ -17,7 +18,8 @@ const child = spawn('pnpm', ['--filter', '@studyo/server', 'start'], {
   stdio: 'inherit',
   env: {
     ...process.env,
-    STUDYO_LIBRARY: lib,
+    STUDYO_ROOT: tmp,
+    STUDYO_ADMIN_USER: 'demo',
     STUDYO_TOKEN: process.env.STUDYO_TOKEN ?? 'demo',
     STUDYO_REPLAY: join(root, 'fixtures/replay'),
   },

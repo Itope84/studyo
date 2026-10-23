@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, '..');
 const tmp = join(tmpdir(), 'studyo-offline-e2e');
 rmSync(tmp, { recursive: true, force: true });
 const web = join(tmp, 'web');
-const lib = join(tmp, 'library');
+const lib = join(tmp, 'library', 'users', 'e2e');
 execSync(`pnpm --filter @studyo/app exec expo export --platform web --output-dir ${web}`, {
   cwd: root,
   stdio: 'inherit',
@@ -26,7 +26,8 @@ const child = spawn('pnpm', ['--filter', '@studyo/server', 'start'], {
   stdio: 'inherit',
   env: {
     ...process.env,
-    STUDYO_LIBRARY: lib,
+    STUDYO_ROOT: join(tmp, 'library'),
+    STUDYO_ADMIN_USER: 'e2e',
     STUDYO_TOKEN: 'e2e-token',
     STUDYO_PORT: '8793',
     STUDYO_WEB_PORT: '8794',

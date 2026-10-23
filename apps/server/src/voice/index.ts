@@ -1,4 +1,3 @@
-import type { Config } from '../config.ts';
 import type { VoiceEngine } from './engine.ts';
 import { fakeEngine, geminiEngine } from './gemini.ts';
 import { findFfmpeg } from './render.ts';
@@ -11,7 +10,10 @@ export interface Voice {
 }
 
 /** The voice the server uses: Gemini, or a silent stand-in when replaying scripts (tests, demos). */
-export function createVoice(config: Config, env: NodeJS.ProcessEnv = process.env): Voice {
+export function createVoice(
+  config: { replayDir: string | null },
+  env: NodeJS.ProcessEnv = process.env,
+): Voice {
   const engine = config.replayDir
     ? fakeEngine()
     : geminiEngine({

@@ -96,6 +96,14 @@ Keep a filesystem `LibraryStore` so `pnpm test`, `pnpm e2e`, local dev and self-
 - [ ] Write a small stub gateway (about 30 lines) that forwards OpenAI-compatible requests to the configured upstream and logs `usage`. Point OpenCode at it with a custom provider (`provider.<name>.npm = "@ai-sdk/openai-compatible"`, `options.baseURL`, `options.apiKey`, `models`). Check config keys against current OpenCode docs. This proves streaming, tool calls and token counts survive a proxy, and that a fake "job token" works as the key.
 - [ ] Record real token and cache numbers per job kind. Replace the estimates above.
 
+### Phase 0.5: multiple users on this Mac (friends and family beta)
+
+Same server, same app, same OpenCode. Each person gets an invite token and their own library folder under `library/users/<id>/`; your library moves to `library/users/temitope/`. No quotas yet, a global cap on concurrent jobs, and terminal commands to add, reset, disable, back up and monitor users. About 5 testers decide whether the hosted phases are worth it. Full build plan: [`docs/multi-user-plan.md`](multi-user-plan.md).
+
+- [ ] Steps 1–9 of `docs/multi-user-plan.md` built, tests green.
+- [ ] Library backed up and migrated to `library/users/temitope`, your devices still signed in.
+- [ ] 5 testers invited, monitored with `pnpm users list` / `pnpm users jobs`.
+
 ### Phase 1: the container, locally in Docker
 
 - [ ] Extract the Python imports and shell tools the model uses from `job_log` (commands are truncated to about 79 characters, so also inspect a few real runs). Define the image contents.

@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { KnowsEntry, Profile } from '@studyo/api';
-import { parse, stringify } from 'yaml';
+import { parseFrontMatter } from '@studyo/renderer';
+import { stringify } from 'yaml';
 import { today } from './util.ts';
 
 const FRONT = /^---\n([\s\S]*?)\n---\n?/;
@@ -15,7 +16,7 @@ export function readProfile(library: string): Profile {
   if (!existsSync(path)) return { knows: [], notes: '' };
   const text = readFileSync(path, 'utf8');
   const match = FRONT.exec(text);
-  const front = match ? ((parse(match[1] ?? '') as { knows?: KnowsEntry[] } | null) ?? {}) : {};
+  const front = match ? (parseFrontMatter<{ knows?: KnowsEntry[] }>(match[1] ?? '') ?? {}) : {};
   const notes = match ? text.slice(match[0].length) : text;
   return { knows: Array.isArray(front.knows) ? front.knows : [], notes: notes.replace(/^\n+/, '') };
 }

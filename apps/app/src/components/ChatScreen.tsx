@@ -129,7 +129,7 @@ export function ChatScreen({ id }: { id: string }) {
         >
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.sage }} />
           <T variant="meta" tone="lead" style={{ flex: 1 }} numberOfLines={1}>
-            Starts from {isCourse ? 'this course' : 'this pack'} · {sourceList.length} source
+            Starts from {isCourse ? 'this course' : 'this reference'} · {sourceList.length} source
             {sourceList.length === 1 ? '' : 's'}
           </T>
           <Button
@@ -163,7 +163,7 @@ export function ChatScreen({ id }: { id: string }) {
               body={
                 isCourse
                   ? 'Good for questions across chapters. It looks at the course map first, then opens only the chapters it needs.'
-                  : 'Ask anything about it. Answers start from the pack and its saved sources, and say so when they go beyond them.'
+                  : 'Ask anything about it. Answers start from the reference and its saved sources, and say so when they go beyond them.'
               }
             />
           ) : null}
@@ -228,7 +228,11 @@ export function ChatScreen({ id }: { id: string }) {
           </View>
         </View>
       </KeyboardAvoidingView>
-      <Sheet open={sourcesOpen} onClose={() => setSourcesOpen(false)} title="Sources in this pack">
+      <Sheet
+        open={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
+        title="Sources in this reference"
+      >
         {sourceList.length === 0 ? (
           <T variant="bodySmall" tone="lead">
             No saved sources yet.
@@ -408,7 +412,7 @@ function Message({
               <Icon name="add-to-photos" size={20} tone="primary" />
               <View style={{ flex: 1, gap: 2 }}>
                 <T variant="label" style={{ fontFamily: fonts.uiSemibold }}>
-                  Add this to the pack?
+                  Add this to the reference?
                 </T>
                 <T variant="meta" tone="lead">
                   Enrich the topic with sources on: {m.suggest_enrich}

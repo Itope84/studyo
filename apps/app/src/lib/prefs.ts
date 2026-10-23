@@ -24,6 +24,8 @@ interface Prefs {
   dismissedOffers: string[];
   /** A connection waiting for its Cloudflare Access sign-in to come back (web redirects lose page state). */
   pendingConnection: Connection | null;
+  /** Who was signed in last; a different person on this device must not see the last one's offline copies. */
+  lastUserId: string | null;
   hydrated: boolean;
   setConnection: (c: Connection | null) => void;
   setTheme: (t: Prefs['theme']) => void;
@@ -33,6 +35,7 @@ interface Prefs {
   setHomeSort: (s: Prefs['homeSort']) => void;
   dismissOffer: (messageId: string) => void;
   setPending: (c: Connection | null) => void;
+  setLastUserId: (id: string | null) => void;
   setAccessToken: (token: string) => void;
 }
 
@@ -47,6 +50,7 @@ export const usePrefs = create<Prefs>()(
       homeSort: 'recent',
       dismissedOffers: [],
       pendingConnection: null,
+      lastUserId: null,
       hydrated: false,
       setConnection: (connection) =>
         set({
@@ -61,6 +65,7 @@ export const usePrefs = create<Prefs>()(
       dismissContinue: (dismissedContinue) => set({ dismissedContinue }),
       setHomeSort: (homeSort) => set({ homeSort }),
       setPending: (pendingConnection) => set({ pendingConnection }),
+      setLastUserId: (lastUserId) => set({ lastUserId }),
       setAccessToken: (cfToken) =>
         set((s) => (s.connection ? { connection: { ...s.connection, cfToken } } : {})),
       dismissOffer: (id) =>
@@ -80,6 +85,7 @@ export const usePrefs = create<Prefs>()(
         dismissedContinue,
         homeSort,
         dismissedOffers,
+        lastUserId,
       }) => ({
         connection,
         theme,
@@ -89,6 +95,7 @@ export const usePrefs = create<Prefs>()(
         homeSort,
         dismissedOffers,
         pendingConnection,
+        lastUserId,
       }),
       onRehydrateStorage: () => () => usePrefs.setState({ hydrated: true }),
     },
